@@ -15,9 +15,6 @@ services:
       CTS_OCR_SERVER_TOKEN: "" # Paste your existing OCR token here; required.
       CTS_OCR_DETECTOR_SCALE: "2"
     command: ["--host", "0.0.0.0", "--gpu-index", "0"]
-    networks:
-      proxy:
-        aliases: [cts-ocr]
     read_only: true
     tmpfs:
       - /tmp:size=256m,mode=1777
