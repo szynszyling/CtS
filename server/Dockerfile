@@ -36,5 +36,6 @@ RUN python -m pip install --no-cache-dir httpx==0.28.1
 COPY server/tests /opt/tests
 USER 10001:10001
 RUN python -m unittest discover -s /opt/tests -q
+RUN cts-ocr-server --device cpu --self-test
 
 FROM runtime AS final

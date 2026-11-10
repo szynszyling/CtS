@@ -79,6 +79,7 @@ def main():
                         log.seek(0);raise RuntimeError('Server startup failed: '+log.read()[-4500:])
                     time.sleep(.1)
             assert health['accelerated']==(args.device=='vulkan')
+            assert health['precision']=='fp32' and health['self_test_passed']
             if args.device=='vulkan':assert args.gpu_name.lower() in health['device'].lower()
             print('Actual backend:',json.dumps(health),flush=True)
             cases=[('English','Circle these words',18,False,False),

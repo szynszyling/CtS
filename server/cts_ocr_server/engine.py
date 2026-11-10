@@ -41,6 +41,11 @@ def dictionary(path):
 def ctc_runs(probabilities):
     """Collapse repeated CTC steps while retaining each character's span."""
     import numpy as np
+    if probabilities.ndim!=2 or not all(probabilities.shape):
+        raise RuntimeError('Unexpected CTC output shape.')
+    validate_probabilities(probabilities)
+    if not np.allclose(probabilities.sum(axis=1),1,rtol=0,atol=.005):
+        raise RuntimeError('The OCR recognizer returned invalid probability sums.')
     indices=np.argmax(probabilities,axis=1)
     result=[]
     previous=0
@@ -54,6 +59,14 @@ def ctc_runs(probabilities):
             result.append([token,step,step+1,confidence])
         previous=token
     return result
+
+
+def validate_probabilities(probabilities):
+    import numpy as np
+    if not probabilities.size or not np.isfinite(probabilities).all():
+        raise RuntimeError('The OCR model returned empty or non-finite output. Check the GPU driver.')
+    if probabilities.min() < -.0001 or probabilities.max() > 1.0001:
+        raise RuntimeError('The OCR model returned probabilities outside 0–1. Check the GPU driver.')
 
 
 def compatible_parameters(text):
@@ -102,6 +115,8 @@ class NcnnEngine:
         self.ncnn=ncnn
         self.device=device
         self.gpu_index=gpu_index
+        self.precision='fp32'
+        self.self_test_passed=False
         if device not in ('vulkan','cpu'):
             raise ValueError('Device must be vulkan or cpu.')
         if device=='vulkan':
@@ -123,6 +138,16 @@ class NcnnEngine:
         net=self.ncnn.Net()
         net.opt.num_threads=4
         net.opt.use_vulkan_compute=self.device=='vulkan'
+        # ncnn enables reduced precision by default. Force FP32 rather than
+        # depending on driver FP16 support; NaNs can otherwise decode as
+        # confident repeated letters. Apply this BEFORE loading either model,
+        # retaining Vulkan execution while avoiding implicit FP16 paths.
+        net.opt.use_fp16_packed=False
+        net.opt.use_fp16_storage=False
+        net.opt.use_fp16_arithmetic=False
+        net.opt.use_bf16_storage=False
+        net.opt.use_int8_storage=False
+        net.opt.use_int8_arithmetic=False
         if self.device=='vulkan':
             net.set_vulkan_device(self.gpu_index)
         prefix=directory/('PP_OCRv5_mobile_'+task+'.ncnn')
@@ -144,7 +169,30 @@ class NcnnEngine:
             code,output=extractor.extract('out0')
             if code:
                 raise RuntimeError('The OCR GPU inference failed.')
-            return np.array(output,copy=True)
+            result=np.array(output,copy=True)
+            if not result.size or not np.isfinite(result).all():
+                raise RuntimeError('The OCR model returned empty or non-finite output. Check the GPU driver.')
+            return result
+
+    def self_test(self):
+        """Exercise both networks before accepting screenshots or reporting ready.
+
+        Pillow's bundled font makes this reproducible in the headless image;
+        neither a desktop font installation nor any user image is needed.
+        """
+        from PIL import Image,ImageDraw,ImageFont
+        self.self_test_passed=False
+        font=ImageFont.load_default(size=32)
+        for text in ('Circle these words','Hello World 123'):
+            image=Image.new('RGB',(640,120),'white')
+            ImageDraw.Draw(image).text((24,32),text,font=font,fill='black')
+            glyphs=self.recognize(image)
+            recognized=''.join(glyph['text'] for glyph in glyphs).replace(' ','')
+            if recognized!=text.replace(' ',''):
+                raise RuntimeError(f'OCR self-test expected {text!r}, received {recognized[:100]!r}.')
+        if self.recognize(Image.new('RGB',(320,96),'white')):
+            raise RuntimeError('OCR self-test detected text in a blank image.')
+        self.self_test_passed=True
 
     def detect(self,image):
         import cv2
@@ -159,6 +207,7 @@ class NcnnEngine:
         probability=self.infer(self.detector,padded,[.485*255,.456*255,.406*255],[1/(.229*255),1/(.224*255),1/(.225*255)]).squeeze()
         if probability.ndim!=2:
             raise RuntimeError('Unexpected detector output shape.')
+        validate_probabilities(probability)
         mask=(probability>.3).astype(np.uint8)*255
         contours,_=cv2.findContours(mask,cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
         result=[]

@@ -13,6 +13,7 @@ import time
 
 from fastapi import FastAPI, HTTPException, Request
 from PIL import Image, UnidentifiedImageError
+from . import __version__
 
 MAX_BYTES=16*1024*1024
 MAX_PIXELS=24_000_000
@@ -80,12 +81,14 @@ class InferenceWorker:
 
 
 def create_app(engine,token=''):
+    if not engine.self_test_passed:
+        raise RuntimeError('The OCR engine must pass its recognition self-test before serving requests.')
     worker=InferenceWorker(engine)
     @asynccontextmanager
     async def lifespan(app):
         yield
         worker.close()
-    app=FastAPI(title='Circle to Search OCR',version='0.12.0',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
+    app=FastAPI(title='Circle to Search OCR',version=__version__,lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
 
     def authorize(request):
         if token and not hmac.compare_digest(request.headers.get('Authorization','').encode('utf-8'), ('Bearer '+token).encode('utf-8')):
@@ -95,6 +98,7 @@ def create_app(engine,token=''):
     async def health(request:Request):
         authorize(request)
         return {'service':'circle-to-search-ocr','api_version':API_VERSION,'status':'ready','engine':'ppocrv5-ncnn',
+                'version':__version__,'precision':engine.precision,'self_test_passed':engine.self_test_passed,
                 'device':engine.device_name,'gpu_index':engine.gpu_index,
                 'accelerated':engine.device=='vulkan','queued':worker.queue.qsize(),
                 'languages':['eng','jpn','chi_sim','chi_tra'],'character_boxes':True}

@@ -39,9 +39,9 @@ stat -c %g /dev/dri/renderD128
 Put the generated token and render-node group ID in `server/.env`. The file is gitignored. Build and enumerate the container's devices:
 
 ```sh
-docker build -f server/Dockerfile -t circle-to-search-ocr:0.12.0 .
+docker build -f server/Dockerfile -t circle-to-search-ocr:0.12.1 .
 docker run --rm --device /dev/dri --group-add YOUR_RENDER_GID \
-  circle-to-search-ocr:0.12.0 --list-devices
+  circle-to-search-ocr:0.12.1 --list-devices
 ```
 
 Set `CTS_OCR_GPU_INDEX` to the HD 630's index. For direct LAN access, set `CTS_OCR_BIND` to the server's LAN IP. The default is `127.0.0.1` for an SSH tunnel:
@@ -54,6 +54,28 @@ ssh -N -L 8766:127.0.0.1:8766 user@your-server
 In CtS select **Self-hosted CtS server**, enter `http://127.0.0.1:8766` when using the tunnel, and paste the token. A direct LAN connection uses `http://your-server:8766`. Use an SSH tunnel or HTTPS reverse proxy when the network is not trusted: a bearer token authenticates requests but HTTP does not encrypt screenshots.
 
 The Compose service uses a non-root user, the render-device group, a read-only root filesystem, temporary cache storage, a health check, bounded memory/processes and no Linux capabilities. Model files are downloaded at build time from a pinned upstream revision and checked against committed SHA-256 values. The running image can perform OCR offline. It contains neither the desktop client nor your screen captures.
+
+### Updating and diagnosing repeated letters
+
+From the checkout on the server, keeping your existing `server/.env`:
+
+```sh
+git pull --ff-only
+docker compose --env-file server/.env -f server/compose.yaml up -d --build
+docker compose --env-file server/.env -f server/compose.yaml logs --tail 40 ocr
+```
+
+Version 0.12.0 was observed returning hundreds of `Y` characters at 100% confidence from unrelated images on an Intel HD 630. Version 0.12.1 forces FP32 tensor storage and arithmetic before loading both networks, while retaining Vulkan GPU execution. It rejects non-finite/out-of-range model probabilities and invalid CTC distributions instead of converting corrupt values into selectable letters. ncnn documents reduced-precision inference as a possible source of incorrect or non-finite output; see its [troubleshooting guide](https://github.com/Tencent/ncnn/wiki/FAQ-ncnn-produce-wrong-result) and [Vulkan precision settings](https://github.com/Tencent/ncnn/wiki/vulkan-notes).
+
+Every startup now recognizes two different known text images and checks a blank image. The server accepts requests only after this passes. Health reports `version`, `precision: "fp32"` and `self_test_passed: true`. A passing smoke test is a basic model/driver check, not a guarantee of accuracy on every screenshot. You can also run the check independently, without starting another HTTP listener:
+
+```sh
+docker compose --env-file server/.env -f server/compose.yaml run --rm ocr --gpu-index 0 --self-test
+# Reference run with exactly the same models, without Vulkan:
+docker compose --env-file server/.env -f server/compose.yaml run --rm ocr --device cpu --self-test
+```
+
+Use your configured GPU index in the first command. If the CPU check passes but the Vulkan check fails, keep the failed GPU service stopped and check/update the graphics driver or container Mesa package. CPU reference mode is available explicitly; the app never silently claims CPU inference is GPU acceleration.
 
 ## Direct Python deployment
 
@@ -73,7 +95,7 @@ The service defaults to `127.0.0.1:8766`. Listening beyond localhost requires a 
 
 Both endpoints accept `Authorization: Bearer TOKEN` when authentication is enabled.
 
-- `GET /v1/health`: API version, readiness, actual selected device, acceleration state, supported languages and character-box capability.
+- `GET /v1/health`: API/server versions, readiness after the startup recognition test, precision, actual selected device, acceleration state, supported languages and character-box capability.
 - `POST /v1/ocr?language=jpn%2Beng&vertical=false&priority=interactive`: raw `image/png` body. Priority is `interactive` or `background`.
 
 The CtS-specific response contains `service: "circle-to-search-ocr"`, `api_version: 1`, original pixel `width`/`height`, `glyphs`, `engine`, `device`, `accelerated`, `elapsed_ms` and `queue_ms`. Each glyph has `text`, `bbox: [x,y,width,height]`, `line`, `word` and a 0–100 `confidence`. Coordinates refer to the submitted image, before desktop display scaling. Recognition uses CTC timestep positions mapped through the actual recognition crop; kana and kanji are individually selectable. Latin word IDs preserve word snapping and spaces.
@@ -88,11 +110,11 @@ Server mode sends the frozen monitor image and regional crops to the configured 
 # API, authentication, queue priority, failure paths and geometry tests in Docker
 docker build --target test -f server/Dockerfile -t circle-to-search-ocr:test .
 # Actual GPU/container/client checks; uses synthetic images only
-python3 tools/ocr_server_smoke.py --docker circle-to-search-ocr:0.12.0 --gpu-name AMD
+python3 tools/ocr_server_smoke.py --docker circle-to-search-ocr:0.12.1 --gpu-name AMD
 # Explicit CPU reference integration check
-python3 tools/ocr_server_smoke.py --docker circle-to-search-ocr:0.12.0 --device cpu
+python3 tools/ocr_server_smoke.py --docker circle-to-search-ocr:0.12.1 --device cpu
 ```
 
-The Radeon loopback test measured roughly 50–60 ms for the small horizontal Japanese fixtures after warm-up and roughly 45 ms for vertical text. Those are synthetic 900×160 / 180×500 image requests, not guarantees for full-screen captures, arbitrary fonts or remote-network latency. The same neural models in explicit CPU reference mode on the 7800X3D measured about 40–45 ms for the small horizontal fixtures; this small Radeon is therefore not faster than that CPU on those inputs. HD 630 performance has not been measured.
+The FP32 Radeon container check measured roughly 65–90 ms per request across these synthetic 900×160 / 180×500 fixtures. The same models in explicit CPU reference mode on the 7800X3D measured roughly 35–51 ms. Full precision costs time compared with the previous reduced-precision run (about 45–60 ms), and this small Radeon is not faster than that CPU on these inputs. These are synthetic checks, not guarantees for full-screen captures, arbitrary fonts or remote-network latency. Successful FP32 HD 630 inference and its performance still need verification on the server.
 
 See [third-party sources and licenses](THIRD_PARTY.md).

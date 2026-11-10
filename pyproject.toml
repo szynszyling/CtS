@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "circle-to-search-kde"
-version = "0.12.1"
+version = "0.12.2"
 description = "Circle anything on your KDE Plasma desktop and search it"
 requires-python = ">=3.10"
 dependencies = ["PySide6>=6.8"]

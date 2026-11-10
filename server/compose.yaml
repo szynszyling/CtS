@@ -1,6 +1,6 @@
 services:
   ocr:
-    image: circle-to-search-ocr:0.12.0
+    image: circle-to-search-ocr:0.12.1
     build:
       context: ..
       dockerfile: server/Dockerfile
