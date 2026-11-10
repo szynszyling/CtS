@@ -50,7 +50,7 @@ CtS is a personal project maintained in my spare time. Updates, support and resp
 
 ### 1. Install
 
-On **Windows x64**, download the ZIP from [GitHub Releases](https://github.com/szynszyling/CtS/releases/latest), extract it and open **Circle to Search.exe**. The tray icon keeps the global shortcut active. See the [Windows guide](packaging/windows/README.md) for startup shortcuts and local CPU OCR.
+On **Windows x64**, run the small Setup executable from [GitHub Releases](https://github.com/szynszyling/CtS/releases/latest). It downloads the app and adds a Start menu entry. A portable ZIP is also available. See the [Windows guide](packaging/windows/README.md) for startup shortcuts and local CPU OCR.
 
 On **Arch Linux with KDE Plasma**, download and extract this repository, then open a terminal in its folder and run:
 

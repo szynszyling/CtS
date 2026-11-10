@@ -4,7 +4,7 @@ The desktop app supports **Windows x64** and **Linux with KDE Plasma 6**. A macO
 
 ## Windows
 
-Get the Windows ZIP from [GitHub Releases](https://github.com/szynszyling/CtS/releases/latest). Extract it and open **Circle to Search.exe**, then use **Win + Shift + G**. The [Windows guide](../packaging/windows/README.md) explains the tray, startup and OCR choices.
+Run the small Windows Setup executable from [GitHub Releases](https://github.com/szynszyling/CtS/releases/latest). It downloads the app and adds a Start menu entry. Open **Circle to Search**, then use **Win + Shift + G**. The [Windows guide](../packaging/windows/README.md) explains the portable ZIP, startup and OCR choices.
 
 ## Arch Linux
 
