@@ -1,159 +1,121 @@
-# CtS GPU OCR server
+# Run your own OCR server 🐳
 
-A headless PP-OCRv5 service using ncnn/Vulkan for neural-network inference. It keeps its detector and recognizer loaded and returns character positions for English, Japanese kana/kanji and Chinese. It needs no Qt, Tesseract, desktop session, CUDA or ROCm installation.
+The OCR server is the part of CtS that reads text from screenshots. Running it on your NAS lets your desktop app use that machine’s hardware.
 
-The Radeon 610M (RADV RAPHAEL_MENDOCINO / GFX1036) and a remote Intel HD Graphics 630 (KBL GT2) have passed actual FP32 Vulkan inference checks: English, 14px kana/kanji on light and dark backgrounds, vertical Japanese, character selection through the HTTP client and blank-image rejection. Software Vulkan devices are rejected. GPU mode does not silently replace an unavailable GPU with a CPU pipeline. Image decoding, geometry and some utility operators run on the CPU.
+The ready-made image is **`ghcr.io/szynszyling/cts-ocr:0.12.3`**. It includes the models and all runtime dependencies, so you do not need Python or a source build on the NAS. The image is currently **private** and supports Linux AMD64, including the tested Intel HD 630 server.
 
-## Published Docker image
+## What you need
 
-**`ghcr.io/szynszyling/cts-ocr:0.12.3`** is the version-pinned server image for Linux AMD64 (including the Intel NAS). Models and runtime dependencies are included; the NAS does not need Python or a source build. `latest` tracks the most recent tested release, and `sha-COMMIT` identifies its source revision. Compose defaults to the pinned version. Set `CTS_OCR_IMAGE` to another release or an immutable `@sha256:...` reference when needed.
+- Docker with Docker Compose.
+- A Linux machine with a working Vulkan GPU and `/dev/dri` render device.
+- Access to the private GitHub container image.
+- A copy of the Compose files and `.env.example` from this folder.
 
-The package is **private**, like the repository. Authenticate on the NAS once:
+The desktop app itself still needs to be installed on your computer. This container only reads text; Google search results remain part of the desktop app.
+
+## 1. Sign in to the image registry 🔑
+
+On the NAS, run:
 
 ```sh
 docker login ghcr.io --username szynszyling
 ```
 
-At the password prompt, use a GitHub **personal access token (classic)** with `read:packages` and permission to this package. This is separate from the OCR server token. See [GitHub's registry authentication instructions](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-with-a-personal-access-token-classic).
+At the password prompt, use a **GitHub personal access token (classic)** with **`read:packages`** and access to this package. Your normal GitHub password will not work. [GitHub’s instructions](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-with-a-personal-access-token-classic) explain how to create the token.
 
-With your existing `server/.env`, update without building:
+This registry token is different from the OCR token you will enter in CtS.
 
-```sh
-docker compose --env-file server/.env -f server/compose.yaml pull
-docker compose --env-file server/.env -f server/compose.yaml up -d
-```
+## 2. Fill in the server settings ⚙️
 
-For SWAG, include `-f server/compose.swag.yaml` in both commands so the existing shared network is retained; see [remote access](REMOTE_ACCESS.md). The container service/name stays the same, preserving an existing `server-ocr-1` upstream. Keep your current token, GPU selection and network settings.
-
-The image runs as UID/GID `10001`, includes a health check and verifies both recognition networks before serving. Compose mounts the GPU device, adds the render group, uses a read-only root and temporary cache, and drops Linux capabilities. No configuration or screenshots are baked into the image.
-
-## Docker on the desktop
-
-From the project root:
-
-```sh
-python3 tools/setup_ocr_docker.py --gpu-name AMD --client
-```
-
-The helper builds the image, enumerates devices inside it, selects the requested GPU, generates a private token, starts a persistent container, checks readiness, then saves the connection in CtS. It binds only to localhost. Use `--replace` to update a container previously created by this helper. It never replaces a differently named/image container.
-
-Reopen CtS with **Meta+Shift+G**. **⋮ → Text recognition…** offers **Local GPU (managed by CtS)**, **Self-hosted CtS server**, and **Local Tesseract (CPU)**. Saving Local GPU sets up the bundled CtS backend if necessary; later launches reuse or start its container. Server mode uses a separate address/token without changing the local GPU configuration. Local fallback is an explicit option. The check sends no screen image.
-
-```sh
-docker logs --tail 30 circle-to-search-ocr
-docker inspect --format '{{.State.Health.Status}}' circle-to-search-ocr
-docker stop circle-to-search-ocr
-docker start circle-to-search-ocr
-```
-
-The helper stores server environment settings and a bearer token in `~/.config/circle-to-search/ocr-server.env`, mode `0600`. Desktop connection settings are in `ocr.json` beside it, also mode `0600`. These paths follow `XDG_CONFIG_HOME`.
-
-## Access away from home
-
-Use the [SWAG HTTPS deployment](REMOTE_ACCESS.md) to expose a subdomain through your existing reverse proxy. The optional Compose override places OCR on a shared Docker network and removes its host-port mappings; SWAG retains TLS and the backend retains bearer authentication. The guide also explains the optional detector-scale setting for faster regional requests.
-
-## Self-host on the Intel server
-
-Install Docker and the host's Intel graphics/Vulkan driver. The container supplies its own Mesa Vulkan userspace drivers; the host must expose a working `/dev/dri/renderD*` device. No display server is required.
+The commands below start from the main CtS project folder. Copy the example settings file once:
 
 ```sh
 cp server/.env.example server/.env
 chmod 600 server/.env
-python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
+```
+
+For an existing installation, keep your current `.env` instead of copying over it.
+
+Generate an OCR token inside the image:
+
+```sh
+docker run --rm --entrypoint python ghcr.io/szynszyling/cts-ocr:0.12.3 -c 'import secrets; print(secrets.token_urlsafe(32))'
+```
+
+Find the GPU’s render-group number:
+
+```sh
 stat -c %g /dev/dri/renderD128
 ```
 
-Put the generated token and render-node group ID in `server/.env`. The file is gitignored. After the registry login above, pull the image and enumerate its devices:
+Open `server/.env` in a text editor and fill in:
+
+| Setting | What to enter |
+| --- | --- |
+| `CTS_OCR_SERVER_TOKEN` | The OCR token you just generated |
+| `CTS_OCR_RENDER_GID` | The number printed by `stat` |
+| `CTS_OCR_GPU_INDEX` | Usually `0`; see the device check below if you have several GPUs |
+
+If the render device is missing, the GPU/driver needs attention before the container can use it.
+
+## 3. Choose how you will connect 🌐
+
+**Already use SWAG?** Follow the [SWAG setup guide](REMOTE_ACCESS.md). It works like other SWAG services: a shared Docker network and a small Nginx configuration. The existing container name can remain your upstream; the provided override also gives it the alias `cts-ocr` on port `8766`.
+
+**Only need access at home?** Set `CTS_OCR_BIND` in `.env` to your NAS’s local IP address, then run:
 
 ```sh
 docker compose --env-file server/.env -f server/compose.yaml pull
+docker compose --env-file server/.env -f server/compose.yaml up -d
+```
+
+The default bind address is `127.0.0.1`, which only allows connections from the NAS itself. Use HTTPS or a VPN for access away from home.
+
+To list available GPUs:
+
+```sh
 docker compose --env-file server/.env -f server/compose.yaml run --rm ocr --list-devices
 ```
 
-Set `CTS_OCR_GPU_INDEX` to the HD 630's index. For direct LAN access, set `CTS_OCR_BIND` to the server's LAN IP. The default is `127.0.0.1` for an SSH tunnel:
+To see whether the server started correctly:
 
 ```sh
-docker compose --env-file server/.env -f server/compose.yaml up -d
-ssh -N -L 8766:127.0.0.1:8766 user@your-server
+docker compose --env-file server/.env -f server/compose.yaml logs --tail 30 ocr
 ```
 
-In CtS select **Self-hosted CtS server**, enter `http://127.0.0.1:8766` when using the tunnel, and paste the token. A direct LAN connection uses `http://your-server:8766`. Use an SSH tunnel or HTTPS reverse proxy when the network is not trusted: a bearer token authenticates requests but HTTP does not encrypt screenshots.
+## 4. Connect the desktop app ✅
 
-The Compose service uses a non-root user, the render-device group, a read-only root filesystem, temporary cache storage, a health check, bounded memory/processes and no Linux capabilities. Model files are downloaded at build time from a pinned upstream revision and checked against committed SHA-256 values. The running image can perform OCR offline. It contains neither the desktop client nor your screen captures.
+In CtS open **⋮ → Text recognition → Self-hosted CtS server**.
 
-### Updating and diagnosing repeated letters
+1. Enter the server address: your HTTPS domain, or `http://YOUR-NAS-IP:8766` on your home network.
+2. Enter the **OCR token** from `.env`.
+3. Click **Check server connection**, then **Save**.
+4. Close and reopen the overlay.
 
-From the checkout on the server, keeping your existing `server/.env`:
+A successful connection reports the GPU in use. Screenshots and nearby selection crops are sent to your server for text recognition.
+
+## Update the image
+
+The Compose file pins a tested release. To choose another release, set `CTS_OCR_IMAGE` in `.env` to its full image name. You can choose `ghcr.io/szynszyling/cts-ocr:latest` if you prefer the newest tested release whenever you update.
+
+Run the same Compose configuration you normally use:
 
 ```sh
-git pull --ff-only
 docker compose --env-file server/.env -f server/compose.yaml pull
 docker compose --env-file server/.env -f server/compose.yaml up -d
-docker compose --env-file server/.env -f server/compose.yaml logs --tail 40 ocr
 ```
 
-Version 0.12.0 was observed returning hundreds of `Y` characters at 100% confidence from unrelated images on an Intel HD 630. Since version 0.12.1, FP32 tensor storage and arithmetic are forced before loading both networks, while retaining Vulkan GPU execution; the same Intel server then passed English, kana/kanji and vertical-text recognition and selection checks. The engine also rejects non-finite/out-of-range model probabilities and invalid CTC distributions instead of converting corrupt values into selectable letters. ncnn documents reduced-precision inference as a possible source of incorrect or non-finite output; see its [troubleshooting guide](https://github.com/Tencent/ncnn/wiki/FAQ-ncnn-produce-wrong-result) and [Vulkan precision settings](https://github.com/Tencent/ncnn/wiki/vulkan-notes).
+If you use the SWAG override, include `-f server/compose.swag.yaml` in **both** commands. Your GPU, OCR token and network settings stay in `.env`.
 
-Every startup now recognizes two different known text images and checks a blank image. The server accepts requests only after this passes. Health reports `version`, `precision: "fp32"` and `self_test_passed: true`. A passing smoke test is a basic model/driver check, not a guarantee of accuracy on every screenshot. You can also run the check independently, without starting another HTTP listener:
+## If something goes wrong
 
-```sh
-docker compose --env-file server/.env -f server/compose.yaml run --rm ocr --gpu-index 0 --self-test
-# Reference run with exactly the same models, without Vulkan:
-docker compose --env-file server/.env -f server/compose.yaml run --rm ocr --device cpu --self-test
-```
+| Message or symptom | What to check |
+| --- | --- |
+| Registry says “denied” | Run `docker login` with a GitHub classic token that has `read:packages`. |
+| CtS reports HTTP 401 | Check the OCR token. Do not enter the GitHub registry token in CtS. |
+| SWAG reports HTTP 502 | Check that SWAG and OCR share a Docker network and that the upstream name/port are correct. |
+| Certificate warning | Use a hostname covered by the certificate. A DuckDNS wildcard certificate covers `cts.yourname.duckdns.org`, not necessarily `yourname.duckdns.org`. |
+| The container is unhealthy or restarts | Read its logs. The recognition startup test must pass before it accepts images. |
+| No GPU is found | Check `/dev/dri`, the render-group number and the selected GPU index. |
 
-Use your configured GPU index in the first command. If the CPU check passes but the Vulkan check fails, keep the failed GPU service stopped and check/update the graphics driver or container Mesa package. CPU reference mode is available explicitly; the app never silently claims CPU inference is GPU acceleration.
-
-## Direct Python deployment
-
-Python 3.10+ with matching ncnn wheels and a working Vulkan driver:
-
-```sh
-python3 -m venv .venv-ocr
-.venv-ocr/bin/pip install --require-hashes -r server/requirements.lock
-.venv-ocr/bin/pip install --no-deps ./server
-.venv-ocr/bin/cts-ocr-server --list-devices
-.venv-ocr/bin/cts-ocr-server --gpu-name Intel --token-file /path/to/private/token
-```
-
-The service defaults to `127.0.0.1:8766`. Listening beyond localhost requires a token (`--token-file` or `CTS_OCR_SERVER_TOKEN`). `--device cpu` is an explicit reference/testing mode, reported as non-accelerated by the API and connection dialog.
-
-## API
-
-Both endpoints accept `Authorization: Bearer TOKEN` when authentication is enabled.
-
-- `GET /v1/health`: API/server versions, readiness after the startup recognition test, precision, actual selected device, acceleration state, supported languages and character-box capability.
-- `POST /v1/ocr?language=jpn%2Beng&vertical=false&priority=interactive`: raw `image/png` body. Priority is `interactive` or `background`.
-
-The CtS-specific response contains `service: "circle-to-search-ocr"`, `api_version: 1`, original pixel `width`/`height`, `glyphs`, `engine`, `device`, `accelerated`, `elapsed_ms` and `queue_ms`. Each glyph has `text`, `bbox: [x,y,width,height]`, `line`, `word` and a 0–100 `confidence`. Coordinates refer to the submitted image, before desktop display scaling. Recognition uses CTC timestep positions mapped through the actual recognition crop; kana and kanji are individually selectable. Latin word IDs preserve word snapping and spaces.
-
-The client applies physical crop offsets and display scaling exactly once. Existing generation tokens discard stale results after a new selection or language/backend change. The server holds at most eight queued requests, prioritizes queued gesture work over background scans and serializes GPU execution. An active background scan yields at model boundaries so a queued gesture crop can run before the next text line; it does not interrupt a Vulkan submission already in progress. Uploads are limited to 16 MiB / 24 million pixels. The service does not save uploads or log their contents.
-
-Server mode sends the frozen monitor image and regional crops to the configured server. Google still receives only the selection when a search or translation is requested. Selecting local Tesseract keeps OCR on the desktop.
-
-## Verification
-
-```sh
-# API, authentication, queue priority, failure paths and geometry tests in Docker
-docker build --target test -f server/Dockerfile -t circle-to-search-ocr:test .
-# Optional development build, without registry access
-docker compose --env-file server/.env -f server/compose.yaml -f server/compose.build.yaml build
-# Actual GPU/container/client checks; uses synthetic images only
-python3 tools/ocr_server_smoke.py --docker circle-to-search-ocr:0.12.3 --gpu-name AMD
-# Explicit CPU reference integration check
-python3 tools/ocr_server_smoke.py --docker circle-to-search-ocr:0.12.3 --device cpu
-# Optional faster detector; test your small text before enabling in production
-python3 tools/ocr_server_smoke.py --docker circle-to-search-ocr:0.12.3 --gpu-name AMD --detector-scale 1.5
-# Exact SWAG virtual host, actual HTTPS, bearer auth and OCR on an isolated network
-python3 tools/ocr_https_smoke.py --image circle-to-search-ocr:0.12.3
-```
-
-## Publishing a release
-
-Bump the backend version in `server/pyproject.toml`, `cts_ocr_server/__init__.py` and the image defaults, then commit and push. Create and push a matching tag such as `ocr-v0.12.3`. The release workflow first runs the desktop tests, backend tests, model self-tests and real HTTPS/OCR integration check. It publishes that exact tested image to GHCR using the repository's temporary `GITHUB_TOKEN`, then checks that it can be pulled. OCI labels identify the source, version and revision. A mismatched tag fails before publishing. Ordinary `main` and pull-request builds only test; they do not overwrite released image tags.
-
-The publishing helper refuses to push into an existing public package or a package linked to another repository. New GHCR packages start private; visibility is verified after the first push before publishing `latest`. It never changes visibility. Publishing requires no stored registry password in GitHub Actions.
-
-The FP32 Radeon container check measured roughly 65–90 ms per request across these synthetic 900×160 / 180×500 fixtures. The same models in explicit CPU reference mode on the 7800X3D measured roughly 35–51 ms. Full precision costs time compared with the previous reduced-precision run (about 45–60 ms), and this small Radeon is not faster than that CPU on these inputs. The remote HD 630 check measured roughly 310–440 ms including LAN round trips. These are synthetic checks, not guarantees for full-screen captures, arbitrary fonts or remote-network latency.
-
-See [third-party sources and licenses](THIRD_PARTY.md).
+Local GPU setup on the desktop is available through **⋮ → Text recognition → Local GPU**. Developer API details, benchmarks, source builds and image publishing are in [DEVELOPMENT.md](DEVELOPMENT.md).

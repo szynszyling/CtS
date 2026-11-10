@@ -4,17 +4,12 @@ import os
 import shutil
 import subprocess
 import tempfile
-from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import QRectF
 from PySide6.QtGui import QImage
 
-
-@dataclass
-class Capture:
-    image: QImage
-    geometry: QRectF
+from ...base import Capture
 
 
 def capture_desktop(workspace: QRectF, current_screen: QRectF) -> Capture:
@@ -23,7 +18,10 @@ def capture_desktop(workspace: QRectF, current_screen: QRectF) -> Capture:
         raise RuntimeError("Install KDE Spectacle to capture your desktop.")
     try:
         help_result = subprocess.run(
-            [binary, "--help"], capture_output=True, text=True, timeout=10,
+            [binary, "--help"],
+            capture_output=True,
+            text=True,
+            timeout=10,
             env={**os.environ, "QT_QPA_PLATFORM": "offscreen"},
         )
         scaled = "--scaled" in help_result.stdout
@@ -34,8 +32,18 @@ def capture_desktop(workspace: QRectF, current_screen: QRectF) -> Capture:
         with tempfile.TemporaryDirectory(prefix="circle-to-search-") as directory:
             output = Path(directory) / "desktop.png"
             result = subprocess.run(
-                [binary, "--new-instance", "--background", "--nonotify", *mode, "--output", str(output)],
-                capture_output=True, text=True, timeout=25,
+                [
+                    binary,
+                    "--new-instance",
+                    "--background",
+                    "--nonotify",
+                    *mode,
+                    "--output",
+                    str(output),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=25,
             )
             image = QImage(str(output))
             if result.returncode or image.isNull():
@@ -45,4 +53,6 @@ def capture_desktop(workspace: QRectF, current_screen: QRectF) -> Capture:
             image.setDevicePixelRatio(1)
         return Capture(image, QRectF(geometry))
     except subprocess.TimeoutExpired as exc:
-        raise RuntimeError("Screen capture timed out. Check that Spectacle works in your Plasma session.") from exc
+        raise RuntimeError(
+            "Screen capture timed out. Check that Spectacle works in your Plasma session."
+        ) from exc

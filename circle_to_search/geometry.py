@@ -17,7 +17,11 @@ def selection_bounds(points: list[QPointF], viewport: QRectF, box: bool = False)
     # stroke. Keep its endpoints so a horizontal line can still select text.
     left, top = max(bounds.left(), viewport.left()), max(bounds.top(), viewport.top())
     right, bottom = min(bounds.right(), viewport.right()), min(bounds.bottom(), viewport.bottom())
-    return QRectF(left, top, right-left, bottom-top) if right >= left and bottom >= top else QRectF()
+    return (
+        QRectF(left, top, right - left, bottom - top)
+        if right >= left and bottom >= top
+        else QRectF()
+    )
 
 
 def pixel_bounds(selection: QRectF, viewport: QRectF, image_size: QSize) -> QRect:
@@ -32,4 +36,6 @@ def pixel_bounds(selection: QRectF, viewport: QRectF, image_size: QSize) -> QRec
     top = math.floor((selection.top() - viewport.top()) * sy)
     right = math.ceil((selection.right() - viewport.left()) * sx)
     bottom = math.ceil((selection.bottom() - viewport.top()) * sy)
-    return QRect(left, top, right - left, bottom - top).intersected(QRect(0, 0, image_size.width(), image_size.height()))
+    return QRect(left, top, right - left, bottom - top).intersected(
+        QRect(0, 0, image_size.width(), image_size.height())
+    )

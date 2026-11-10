@@ -9,23 +9,40 @@ def translate_dark_palette(theme):
     # Translate's native dark palette provider declares these Material tokens.
     # Override its neutral surfaces at that provider, after its own theme switch,
     # so dark icons/controls still use Google's native states and illustrations.
-    tokens={
-        'background':theme.background, 'surface':theme.background,
-        'surface-dim':theme.background, 'surface-container-lowest':theme.background,
-        'surface-container-low':theme.background, 'surface-container':theme.surface,
-        'surface-container-high':theme.hover, 'surface-container-highest':theme.pressed,
-        'surface-bright':theme.hover, 'surface-variant':theme.border,
-        'on-surface':theme.text, 'on-surface-variant':theme.muted,
-        'outline':theme.muted, 'outline-variant':theme.border,
+    tokens = {
+        "background": theme.background,
+        "surface": theme.background,
+        "surface-dim": theme.background,
+        "surface-container-lowest": theme.background,
+        "surface-container-low": theme.background,
+        "surface-container": theme.surface,
+        "surface-container-high": theme.hover,
+        "surface-container-highest": theme.pressed,
+        "surface-bright": theme.hover,
+        "surface-variant": theme.border,
+        "on-surface": theme.text,
+        "on-surface-variant": theme.muted,
+        "outline": theme.muted,
+        "outline-variant": theme.border,
     }
-    declarations=[]
-    for name,color in tokens.items():
-        rgb=','.join(str(int(color[index:index+2],16)) for index in (1,3,5))
-        declarations.extend((f'--gm3-sys-color-{name}:{color}!important;',
-                             f'--gm3-sys-color-{name}-rgb:{rgb}!important;'))
-    return ('@media(prefers-color-scheme:dark){.v1vOZe,.v1vOZe #gb{'+''.join(declarations)+'}'
-            '.v1vOZe :is(#gb,header,[role="banner"]){background:'+theme.background+'!important;'+
-            '--og-bar-background:'+theme.background+'!important;}}')
+    declarations = []
+    for name, color in tokens.items():
+        rgb = ",".join(str(int(color[index : index + 2], 16)) for index in (1, 3, 5))
+        declarations.extend(
+            (
+                f"--gm3-sys-color-{name}:{color}!important;",
+                f"--gm3-sys-color-{name}-rgb:{rgb}!important;",
+            )
+        )
+    return (
+        "@media(prefers-color-scheme:dark){.v1vOZe,.v1vOZe #gb{" + "".join(declarations) + "}"
+        '.v1vOZe :is(#gb,header,[role="banner"]){background:'
+        + theme.background
+        + "!important;"
+        + "--og-bar-background:"
+        + theme.background
+        + "!important;}}"
+    )
 
 
 SEARCH_CHROME = r"""(() => {
@@ -107,7 +124,7 @@ TRANSLATE_CHROME = r"""(() => {
     synchronizeTheme();
     preference.addEventListener('change',()=>{retries=0;synchronizeTheme();});
     new MutationObserver(()=>{cleanHeader();synchronizeTheme();}).observe(document.documentElement,{childList:true,subtree:true});
-})();""".replace('CTS_TRANSLATE_PALETTE',json.dumps(translate_dark_palette(DARK)))
+})();""".replace("CTS_TRANSLATE_PALETTE", json.dumps(translate_dark_palette(DARK)))
 
 
 # Google's basic verification/error document has no native dark stylesheet.

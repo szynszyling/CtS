@@ -1,3 +1,3 @@
-"""Circle to Search for KDE Plasma."""
+"""Shared desktop application for Circle to Search."""
 
-__version__ = "0.12.4"
+__version__ = "0.13.0"

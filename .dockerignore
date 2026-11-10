@@ -3,6 +3,7 @@
 !server/**
 server/**/__pycache__/
 server/**/*.pyc
-server/.env
+server/**/.env*
+server/**/*.token
 server/.venv/
 server/**/models/

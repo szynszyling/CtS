@@ -17,7 +17,7 @@ def fetch_models(destination=ROOT):
         output = destination / (model["name"] + ".traineddata")
         if output.exists() and hashlib.sha256(output.read_bytes()).hexdigest() == model["sha256"]:
             continue
-        url = f'https://raw.githubusercontent.com/tesseract-ocr/tessdata_best/{manifest["revision"]}/{model["name"]}.traineddata'
+        url = f"https://raw.githubusercontent.com/tesseract-ocr/tessdata_best/{manifest['revision']}/{model['name']}.traineddata"
         print("Downloading official OCR model:", model["name"], flush=True)
         with urlopen(url, timeout=90) as response:
             data = response.read()
@@ -30,4 +30,4 @@ def fetch_models(destination=ROOT):
 
 
 if __name__ == "__main__":
-    fetch_models(Path(sys.argv[1]) if len(sys.argv)>1 else ROOT)
+    fetch_models(Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT)

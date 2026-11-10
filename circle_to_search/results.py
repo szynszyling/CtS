@@ -1,25 +1,50 @@
 """Google results in a resizable bottom sheet; the desktop stays visible."""
 
-from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QRect, Qt, QTimer, QUrl, Signal
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QStackedLayout, QStackedWidget, QVBoxLayout, QWidget
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QStackedLayout,
+    QStackedWidget,
+    QVBoxLayout,
+    QWidget,
+)
 from shiboken6 import isValid
 
-from .appearance import current_theme,theme_manager
+from .appearance import current_theme, theme_manager
+from .search import (
+    LENS_UPLOAD_URL,
+    browser_search_url,
+    external_navigation,
+    lens_upload_data,
+    normalize_search_url,
+    search_tab,
+    search_tab_url,
+)
+from .web_scripts import SEARCH_CHROME, SERVICE_THEME, TRANSLATE_CHROME
 from .widgets import IconButton, SearchPill, SearchTabs, SheetHandle
-from .search import browser_search_url, english_light_url, external_navigation, lens_upload_data, search_tab, search_tab_url, LENS_UPLOAD_URL
-from .web_scripts import SEARCH_CHROME,TRANSLATE_CHROME,SERVICE_THEME
 
 
 def create_browser(parent):
     # Lazy import: selection and offline copy also work without Qt WebEngine.
     from PySide6.QtNetwork import QNetworkCookie
-    from PySide6.QtWebEngineCore import QWebEngineHttpRequest, QWebEnginePage, QWebEngineProfile, QWebEngineScript,QWebEngineSettings
+    from PySide6.QtWebEngineCore import (
+        QWebEngineHttpRequest,
+        QWebEnginePage,
+        QWebEngineProfile,
+        QWebEngineScript,
+        QWebEngineSettings,
+    )
     from PySide6.QtWebEngineWidgets import QWebEngineView
 
     class Browser(QWebEngineView):
-        externalRequested=Signal(QUrl)
+        externalRequested = Signal(QUrl)
+
         def __init__(self, parent):
             super().__init__(parent)
             self.cookie_ready = False
@@ -52,73 +77,83 @@ def create_browser(parent):
             self.pending_url = None
             super().stop()
 
-        def upload_image(self,png,query=""):
-            self.image_query=query
-            body,content_type=lens_upload_data(png)
-            request=QWebEngineHttpRequest(QUrl(LENS_UPLOAD_URL+"?hl=en&ep=ccm&s=csp"))
+        def upload_image(self, png, query=""):
+            self.image_query = query
+            body, content_type = lens_upload_data(png)
+            request = QWebEngineHttpRequest(QUrl(LENS_UPLOAD_URL + "?hl=en&ep=ccm&s=csp"))
             request.setMethod(QWebEngineHttpRequest.Method.Post)
-            request.setHeader(b"Content-Type",content_type.encode())
+            request.setHeader(b"Content-Type", content_type.encode())
             request.setPostData(body)
             self.load(request)
 
-        def apply_theme(self,theme):
+        def apply_theme(self, theme):
             self.page().setBackgroundColor(QColor(theme.background))
             # Reapply preferences after QStyleHints updates Chromium NativeTheme.
             # This uses Google's own dark UI, preserving images and video colors.
-            self.settings().setAttribute(QWebEngineSettings.WebAttribute.ForceDarkMode,False)
+            self.settings().setAttribute(QWebEngineSettings.WebAttribute.ForceDarkMode, False)
 
         def preferred_results_url(self):
-            url=english_light_url(self.url().toString())
-            if self.image_query is not None and self.url().path()=="/search":
+            url = normalize_search_url(self.url().toString())
+            if self.image_query is not None and self.url().path() == "/search":
                 if self.image_query:
-                    from urllib.parse import urlsplit,urlunsplit,parse_qsl,urlencode
-                    parts=urlsplit(url)
-                    params=dict(parse_qsl(parts.query,keep_blank_values=True))
-                    params.update(q=self.image_query,udm="24",lns_mode="mu")
-                    url=urlunsplit(parts._replace(query=urlencode(params)))
-                self.image_query=None
+                    from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+                    parts = urlsplit(url)
+                    params = dict(parse_qsl(parts.query, keep_blank_values=True))
+                    params.update(q=self.image_query, udm="24", lns_mode="mu")
+                    url = urlunsplit(parts._replace(query=urlencode(params)))
+                self.image_query = None
             return QUrl(url)
 
     class Page(QWebEnginePage):
-        def __init__(self,profile,parent,new_window=False):
-            super().__init__(profile,parent)
-            self.new_window=new_window
+        def __init__(self, profile, parent, new_window=False):
+            super().__init__(profile, parent)
+            self.new_window = new_window
 
         def acceptNavigationRequest(self, url, kind, main_frame):
-            if main_frame and external_navigation(url.toString(),self.new_window):
+            if main_frame and external_navigation(url.toString(), self.new_window):
                 # Reject this navigation before dismissing/stopping its view.
                 # Stopping Chromium reentrantly inside this callback can crash.
-                QTimer.singleShot(0,view,lambda target=QUrl(url):view.externalRequested.emit(target))
-                if self.new_window:self.deleteLater()
+                QTimer.singleShot(
+                    0, view, lambda target=QUrl(url): view.externalRequested.emit(target)
+                )
+                if self.new_window:
+                    self.deleteLater()
                 return False
             return True
 
         def createWindow(self, kind):
-            return Page(self.profile(),self,new_window=True)
+            return Page(self.profile(), self, new_window=True)
 
-    theme=current_theme()
-    QApplication.instance().styleHints().setColorScheme(Qt.ColorScheme.Dark if theme.dark else Qt.ColorScheme.Light)
+    theme = current_theme()
+    QApplication.instance().styleHints().setColorScheme(
+        Qt.ColorScheme.Dark if theme.dark else Qt.ColorScheme.Light
+    )
     view = Browser(parent)
     profile = QWebEngineProfile("circle-to-search", view)
-    profile.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.AllowPersistentCookies)
+    profile.setPersistentCookiesPolicy(
+        QWebEngineProfile.PersistentCookiesPolicy.AllowPersistentCookies
+    )
     profile.setHttpAcceptLanguage("en-US,en;q=0.9")
-    profile.settings().setUnknownUrlSchemePolicy(QWebEngineSettings.AllowUnknownUrlSchemesFromUserInteraction)
+    profile.settings().setUnknownUrlSchemePolicy(
+        QWebEngineSettings.AllowUnknownUrlSchemesFromUserInteraction
+    )
     cookie = QNetworkCookie(b"SOCS", b"CAI")
     cookie.setDomain(".google.com")
     cookie.setPath("/")
     page = Page(profile, view)
     profile.setParent(page)  # destroy the page before its profile
     page.setBackgroundColor(QColor(theme.background))
-    page.settings().setAttribute(QWebEngineSettings.WebAttribute.ForceDarkMode,False)
+    page.settings().setAttribute(QWebEngineSettings.WebAttribute.ForceDarkMode, False)
     # The native sheet supplies the search field. Remove only Google's duplicate
     # search header; Google's actual results, links and consent UI remain intact.
     script = QWebEngineScript()
     script.setName("circle-to-search-header")
     script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentReady)
     script.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
-    script.setSourceCode(SEARCH_CHROME+"\n"+TRANSLATE_CHROME+"\n"+SERVICE_THEME)
+    script.setSourceCode(SEARCH_CHROME + "\n" + TRANSLATE_CHROME + "\n" + SERVICE_THEME)
     page.scripts().insert(script)
-    navigation_script=QWebEngineScript()
+    navigation_script = QWebEngineScript()
     navigation_script.setName("circle-to-search-tab-preferences")
     navigation_script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
     navigation_script.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
@@ -144,14 +179,14 @@ def create_browser(parent):
 class ResultSheet(QFrame):
     cleared = Signal()
     urlChanged = Signal(str)
-    presented=Signal()
-    externalRequested=Signal(QUrl)
+    presented = Signal()
+    externalRequested = Signal(QUrl)
 
     def __init__(self, parent, browser_factory=create_browser):
         super().__init__(parent)
         self.setObjectName("sheet")
         self.setAttribute(Qt.WA_NoMousePropagation)
-        self.theme=current_theme()
+        self.theme = current_theme()
         self.browser_factory = browser_factory
         self.browser = None
         self.current_url = ""
@@ -159,12 +194,12 @@ class ResultSheet(QFrame):
         self.preferred_redirects = set()
         self.display_generation = 0
         self.navigation_in_progress = False
-        self.theme_reload_pending=False
+        self.theme_reload_pending = False
         self.expanded = False
         self.user_resized = False
-        self.dismissing=False
-        self.sheet_height = min(470, round(parent.height() * .44))
-        self.left_position=None
+        self.dismissing = False
+        self.sheet_height = min(470, round(parent.height() * 0.44))
+        self.left_position = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 0, 16, 12)
         layout.setSpacing(8)
@@ -186,7 +221,7 @@ class ResultSheet(QFrame):
         self.bar.enable_dragging()
         self.bar.dragged.connect(self.move_and_resize)
         layout.addWidget(self.bar)
-        self.tabs=SearchTabs()
+        self.tabs = SearchTabs()
         self.tabs.requested.connect(self.navigate_tab)
         self.tabs.filterRequested.connect(self.filter_time)
         layout.addWidget(self.tabs)
@@ -202,7 +237,9 @@ class ResultSheet(QFrame):
         self.content.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
         self.message_page = QWidget()
         self.message_page.setObjectName("loadingCover")
-        self.message_page.setStyleSheet("QWidget#loadingCover { background: "+self.theme.background+"; }")
+        self.message_page.setStyleSheet(
+            "QWidget#loadingCover { background: " + self.theme.background + "; }"
+        )
         messages = QVBoxLayout(self.message_page)
         messages.addStretch()
         self.message = QLabel("Searching…")
@@ -222,73 +259,99 @@ class ResultSheet(QFrame):
         self.animation.setEasingCurve(QEasingCurve.Type.OutCubic)
         self.animation.finished.connect(self.finish_motion)
         self.hide()
-        manager=theme_manager()
+        manager = theme_manager()
         if manager:
             manager.aboutToChange.connect(self.cover_theme_change)
             manager.changed.connect(self.apply_theme)
 
-    def cover_theme_change(self,theme):
-        self.display_generation+=1
-        self.theme=theme
-        self.message_page.setStyleSheet("QWidget#loadingCover { background: "+theme.background+"; }")
+    def cover_theme_change(self, theme):
+        self.display_generation += 1
+        self.theme = theme
+        self.message_page.setStyleSheet(
+            "QWidget#loadingCover { background: " + theme.background + "; }"
+        )
         self.content.setCurrentWidget(self.message_page)
 
-    def apply_theme(self,theme):
+    def apply_theme(self, theme):
         self.tabs.apply_theme(theme)
-        if not self.browser:return
-        if hasattr(self.browser,'apply_theme'):self.browser.apply_theme(theme)
-        if not self.isVisible():return
+        if not self.browser:
+            return
+        if hasattr(self.browser, "apply_theme"):
+            self.browser.apply_theme(theme)
+        if not self.isVisible():
+            return
         if self.verification.isVisible():
             # Never reload or hide an in-progress challenge. Its isolated
             # verification frame may retain Google's own fixed colors.
             self.content.setCurrentWidget(self.browser)
             return
-        url=self.browser.url() if callable(getattr(self.browser,'url',None)) else QUrl()
-        google=url.host() in ('www.google.com','google.com','lens.google.com','translate.google.com')
+        url = self.browser.url() if callable(getattr(self.browser, "url", None)) else QUrl()
+        google = url.host() in (
+            "www.google.com",
+            "google.com",
+            "lens.google.com",
+            "translate.google.com",
+        )
         if google:
             # Search renders some colors on the server. Preserve the complete
             # URL/profile, including Lens session parameters, when reloading.
-            if self.navigation_in_progress:self.theme_reload_pending=True
-            else:self.browser.reload()
+            if self.navigation_in_progress:
+                self.theme_reload_pending = True
+            else:
+                self.browser.reload()
         elif not self.navigation_in_progress:
-            QTimer.singleShot(100,self.reveal_themed_page)
+            QTimer.singleShot(100, self.reveal_themed_page)
 
     def target_geometry(self):
         parent = self.parentWidget()
         if not self.expanded and not self.user_resized:
-            self.sheet_height = min(470, round(parent.height() * .44))
+            self.sheet_height = min(470, round(parent.height() * 0.44))
         width = min(760, parent.width() - 32)
         height = min(self.sheet_height, parent.height() - 84)
-        left=(parent.width()-width)//2 if self.left_position is None else max(16,min(self.left_position,parent.width()-width-16))
-        return QRect(left,parent.height()-height,width,height)
+        left = (
+            (parent.width() - width) // 2
+            if self.left_position is None
+            else max(16, min(self.left_position, parent.width() - width - 16))
+        )
+        return QRect(left, parent.height() - height, width, height)
 
-    def shift_by(self,delta):
-        if self.dismissing:return
-        running=self.animation.state()==QPropertyAnimation.Running
-        remaining=max(1,self.animation.duration()-self.animation.currentTime())
-        self.left_position=max(16,min(round(self.x()+delta),self.parentWidget().width()-self.width()-16))
+    def shift_by(self, delta):
+        if self.dismissing:
+            return
+        running = self.animation.state() == QPropertyAnimation.Running
+        remaining = max(1, self.animation.duration() - self.animation.currentTime())
+        self.left_position = max(
+            16, min(round(self.x() + delta), self.parentWidget().width() - self.width() - 16)
+        )
         self.animation.stop()
-        self.move(self.left_position,self.y())
+        self.move(self.left_position, self.y())
         if running:
             self.animation.setDuration(remaining)
             self.animation.setStartValue(self.geometry())
             self.animation.setEndValue(self.target_geometry())
             self.animation.start()
 
-    def blocks_selection(self,point):
-        if not self.isVisible():return False
-        bounds=self.geometry()
-        if not self.dismissing and self.animation.state()==QPropertyAnimation.Running:
-            bounds=bounds.united(self.animation.endValue())
+    def blocks_selection(self, point):
+        if not self.isVisible():
+            return False
+        bounds = self.geometry()
+        if not self.dismissing and self.animation.state() == QPropertyAnimation.Running:
+            bounds = bounds.united(self.animation.endValue())
         return bounds.contains(point.toPoint())
 
     def show_sheet(self, animate=True):
         target = self.target_geometry()
-        was_visible=self.isVisible()
-        was_dismissing=self.dismissing
-        self.dismissing=False
-        self.setAttribute(Qt.WA_TransparentForMouseEvents,False)
-        if animate and was_visible and not was_dismissing and self.animation.state()==QPropertyAnimation.Running and self.animation.endValue()==target:
+        was_visible = self.isVisible()
+        was_dismissing = self.dismissing
+        self.dismissing = False
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+        if (
+            animate
+            and was_visible
+            and not was_dismissing
+            and self.animation.state() == QPropertyAnimation.Running
+            and self.animation.endValue() == target
+        ):
             return  # loading and load_url may request the same presentation
         if not animate:
             self.animation.stop()
@@ -298,7 +361,8 @@ class ResultSheet(QFrame):
             self.presented.emit()
             return
         self.animation.stop()
-        if not was_visible:self.setGeometry(target.translated(0,target.height()))
+        if not was_visible:
+            self.setGeometry(target.translated(0, target.height()))
         self.show()
         self.raise_()
         self.presented.emit()
@@ -310,33 +374,42 @@ class ResultSheet(QFrame):
     def finish_motion(self):
         if self.dismissing:
             self.hide()
-            self.dismissing=False
+            self.dismissing = False
 
     def resize_by(self, delta):
-        self.move_and_resize(0,-delta)
+        self.move_and_resize(0, -delta)
 
-    def move_and_resize(self,dx,dy):
-        if self.dismissing:return
+    def move_and_resize(self, dx, dy):
+        if self.dismissing:
+            return
         if not dy:
             self.shift_by(dx)
             return
         self.animation.stop()
         self.user_resized = True
-        self.left_position=max(16,min(round(self.x()+dx),self.parentWidget().width()-self.width()-16))
-        self.sheet_height = max(220,min(self.parentWidget().height()-84,round(self.height()-dy)))
+        self.left_position = max(
+            16, min(round(self.x() + dx), self.parentWidget().width() - self.width() - 16)
+        )
+        self.sheet_height = max(
+            220, min(self.parentWidget().height() - 84, round(self.height() - dy))
+        )
         self.setGeometry(self.target_geometry())
 
     def toggle(self):
         self.expanded = not self.expanded
         self.user_resized = False
-        self.sheet_height = self.parentWidget().height() - 84 if self.expanded else min(470, round(self.parentWidget().height() * .44))
+        self.sheet_height = (
+            self.parentWidget().height() - 84
+            if self.expanded
+            else min(470, round(self.parentWidget().height() * 0.44))
+        )
         self.show_sheet(True)
 
     def loading(self, text="Searching…"):
         self.display_generation += 1
         self.current_url = ""
         self.last_error_code = 0
-        self.theme_reload_pending=False
+        self.theme_reload_pending = False
         self.preferred_redirects.clear()
         self.verification.hide()
         self.external.setEnabled(False)
@@ -353,95 +426,111 @@ class ResultSheet(QFrame):
         self.content.setCurrentWidget(self.message_page)
 
     def load_url(self, url):
-        url = english_light_url(url)
+        url = normalize_search_url(url)
         self.current_url = url
         self.last_error_code = 0
         self.external.setEnabled(True)
         self.tabs.set_active(search_tab(url))
         self.tabs.setEnabled(True)
-        self.tabs.setVisible(QUrl(url).host() in ("www.google.com","google.com","lens.google.com") and QUrl(url).path()=="/search")
+        self.tabs.setVisible(
+            QUrl(url).host() in ("www.google.com", "google.com", "lens.google.com")
+            and QUrl(url).path() == "/search"
+        )
         self.urlChanged.emit(url)
         try:
             self.ensure_browser()
             self.content.setCurrentWidget(self.message_page)
             self.browser.load(QUrl(url))
         except ImportError:
-            self.error("Install Qt WebEngine for results here, or open this search in your browser.")
+            self.error(
+                "Install Qt WebEngine for results here, or open this search in your browser."
+            )
         self.show_sheet()
 
     def ensure_browser(self):
         if self.browser is None:
             self.browser = self.browser_factory(self.content)
-            if hasattr(self.browser,'externalRequested'):
+            if hasattr(self.browser, "externalRequested"):
                 self.browser.externalRequested.connect(self.externalRequested.emit)
             self.browser.loadFinished.connect(self.loaded)
-            if hasattr(self.browser,"loadStarted"):
+            if hasattr(self.browser, "loadStarted"):
                 self.browser.loadStarted.connect(self.navigation_started)
             self.browser.page().loadingChanged.connect(self.loading_info)
-            if hasattr(self.browser,"urlChanged"):
+            if hasattr(self.browser, "urlChanged"):
                 self.browser.urlChanged.connect(self.browser_url_changed)
             self.content.addWidget(self.browser)
 
-    def browser_url_changed(self,url):
-        if url.host() in ("www.google.com","lens.google.com") and url.path()=="/search":
-            self.current_url=url.toString()
+    def browser_url_changed(self, url):
+        if url.host() in ("www.google.com", "lens.google.com") and url.path() == "/search":
+            self.current_url = url.toString()
             self.external.setEnabled(True)
             self.tabs.set_active(search_tab(url.toString()))
             self.tabs.setEnabled(True)
-            preferred=QUrl(english_light_url(url.toString()))
-            if not self.navigation_in_progress and preferred!=url and preferred.toString() not in self.preferred_redirects:
+            preferred = QUrl(normalize_search_url(url.toString()))
+            if (
+                not self.navigation_in_progress
+                and preferred != url
+                and preferred.toString() not in self.preferred_redirects
+            ):
                 # Google can change tabs through history.pushState instead of
                 # a full navigation. Cover that transition as soon as its URL
                 # changes; loaded() will normalize ordinary redirects.
-                self.display_generation+=1
+                self.display_generation += 1
                 self.content.setCurrentWidget(self.message_page)
                 self.preferred_redirects.add(preferred.toString())
-                self.navigation_in_progress=True
-                QTimer.singleShot(0,lambda:self.browser.load(preferred))
+                self.navigation_in_progress = True
+                QTimer.singleShot(0, lambda: self.browser.load(preferred))
 
-    def navigate_tab(self,tab):
-        url=search_tab_url(self.current_url,tab,self.bar.query.text().strip())
+    def navigate_tab(self, tab):
+        url = search_tab_url(self.current_url, tab, self.bar.query.text().strip())
         self.loading()
         self.load_url(url)
 
-    def filter_time(self,period):
-        from urllib.parse import urlsplit,urlunsplit,parse_qsl,urlencode
-        parts=urlsplit(self.current_url or search_tab_url("","all",self.bar.query.text().strip()))
-        params=dict(parse_qsl(parts.query,keep_blank_values=True))
-        params.pop("start",None)
+    def filter_time(self, period):
+        from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+        parts = urlsplit(
+            self.current_url or search_tab_url("", "all", self.bar.query.text().strip())
+        )
+        params = dict(parse_qsl(parts.query, keep_blank_values=True))
+        params.pop("start", None)
         if period:
-            params["tbs"]="qdr:"+period
+            params["tbs"] = "qdr:" + period
         else:
-            params.pop("tbs",None)
-        url=urlunsplit(parts._replace(query=urlencode(params)))
+            params.pop("tbs", None)
+        url = urlunsplit(parts._replace(query=urlencode(params)))
         self.loading()
         self.load_url(url)
 
-    def search_image(self,png,query=""):
+    def search_image(self, png, query=""):
         self.loading("Searching with Google Lens…")
         try:
             self.ensure_browser()
             self.content.setCurrentWidget(self.message_page)
             # The upload and resulting search use the same browser profile,
             # verification cookies and connection, preserving the Lens session.
-            self.browser.upload_image(png,query)
+            self.browser.upload_image(png, query)
         except ImportError:
             self.error("Install Qt WebEngine for image search here, or use --external.")
 
     def loaded(self, ok):
-        if self.dismissing:return
+        if self.dismissing:
+            return
         self.navigation_in_progress = False
         if ok and self.browser:
             if self.theme_reload_pending:
-                self.theme_reload_pending=False
-                if self.browser.url().path()=='/search' and not self.verification.isVisible():
+                self.theme_reload_pending = False
+                if self.browser.url().path() == "/search" and not self.verification.isVisible():
                     self.browser.reload()
                     return
-            if hasattr(self.browser,"preferred_results_url"):
-                preferred=self.browser.preferred_results_url()
-                if preferred!=self.browser.url() and preferred.toString() not in self.preferred_redirects:
+            if hasattr(self.browser, "preferred_results_url"):
+                preferred = self.browser.preferred_results_url()
+                if (
+                    preferred != self.browser.url()
+                    and preferred.toString() not in self.preferred_redirects
+                ):
                     self.preferred_redirects.add(preferred.toString())
-                    self.navigation_in_progress=True
+                    self.navigation_in_progress = True
                     self.browser.load(preferred)
                     return
             self.verification.hide()
@@ -453,33 +542,42 @@ class ResultSheet(QFrame):
             QTimer.singleShot(0, self.handle_failed_load)
 
     def navigation_started(self):
-        self.navigation_in_progress=True
+        self.navigation_in_progress = True
         self.display_generation += 1
         self.last_error_code = 0
         self.content.setCurrentWidget(self.message_page)
 
-    def reveal_themed_page(self,attempt=0):
-        generation=self.display_generation
+    def reveal_themed_page(self, attempt=0):
+        generation = self.display_generation
+
         def reveal():
-            if isValid(self) and generation==self.display_generation and self.isVisible():
+            if isValid(self) and generation == self.display_generation and self.isVisible():
                 self.content.setCurrentWidget(self.browser)
-        if not hasattr(self.browser.page(),"runJavaScript"):
+
+        if not hasattr(self.browser.page(), "runJavaScript"):
             reveal()
             return
+
         def checked(matches):
-            if not isValid(self) or generation!=self.display_generation or not self.isVisible():
+            if not isValid(self) or generation != self.display_generation or not self.isVisible():
                 return
             if matches is True:
                 # Let the visible Chromium view repaint beneath the cover.
-                QTimer.singleShot(50,reveal)
-            elif attempt<160:
+                QTimer.singleShot(50, reveal)
+            elif attempt < 160:
+
                 def retry():
-                    if isValid(self) and generation==self.display_generation:
-                        self.reveal_themed_page(attempt+1)
-                QTimer.singleShot(50,retry)
+                    if isValid(self) and generation == self.display_generation:
+                        self.reveal_themed_page(attempt + 1)
+
+                QTimer.singleShot(50, retry)
             else:
-                self.error("Google's results page did not finish applying the selected theme. Try the search again or open it in your browser.")
-        self.browser.page().runJavaScript("""(() => {
+                self.error(
+                    "Google's results page did not finish applying the selected theme. Try the search again or open it in your browser."
+                )
+
+        self.browser.page().runJavaScript(
+            """(() => {
             const dark=THEME_DARK;
             if (!document.body) return false;
             for (const element of [document.body,document.documentElement]) {
@@ -489,7 +587,9 @@ class ResultSheet(QFrame):
                     return (channels.slice(0,3).reduce((sum,c)=>sum+Number(c),0)<384)===dark;
             }
             return true;
-        })()""".replace("THEME_DARK","true" if self.theme.dark else "false"),checked)
+        })()""".replace("THEME_DARK", "true" if self.theme.dark else "false"),
+            checked,
+        )
 
     def handle_failed_load(self):
         if not self.isVisible():
@@ -499,7 +599,9 @@ class ResultSheet(QFrame):
         if self.last_error_code >= 400 and self.browser:
             self.show_http_status(self.last_error_code)
         else:
-            self.error("Google could not load these results. Try opening the search in your browser.")
+            self.error(
+                "Google could not load these results. Try opening the search in your browser."
+            )
 
     def loading_info(self, info):
         self.last_error_code = info.errorCode()
@@ -508,41 +610,50 @@ class ResultSheet(QFrame):
             # access-denied response needs a different, truthful explanation.
             self.show_http_status(info.errorCode())
 
-    def show_http_status(self,code):
-        self.theme_reload_pending=False
-        if code==429:
+    def show_http_status(self, code):
+        self.theme_reload_pending = False
+        if code == 429:
             self.content.setCurrentWidget(self.browser)
-            self.verification.setText("Google is limiting searches. Complete any verification shown below, or open this search in your browser.")
-        elif code==403:
+            self.verification.setText(
+                "Google is limiting searches. Complete any verification shown below, or open this search in your browser."
+            )
+        elif code == 403:
             self.verification.hide()
-            self.error("Google denied this embedded search (HTTP 403). Open the search in your normal browser to use its existing session.")
+            self.error(
+                "Google denied this embedded search (HTTP 403). Open the search in your normal browser to use its existing session."
+            )
             return
         else:
             self.content.setCurrentWidget(self.browser)
-            self.verification.setText(f"Google returned HTTP {code}. Try again later or open this search in your browser.")
+            self.verification.setText(
+                f"Google returned HTTP {code}. Try again later or open this search in your browser."
+            )
         self.verification.show()
 
     def open_external(self):
         if self.current_url:
             self.externalRequested.emit(QUrl(browser_search_url(self.current_url)))
 
-    def stop(self,animate=False):
-        self.theme_reload_pending=False
+    def stop(self, animate=False):
+        self.theme_reload_pending = False
         self.display_generation += 1
         if self.browser:
             self.browser.stop()
         self.current_url = ""
         self.external.setEnabled(False)
         if animate and self.isVisible():
-            if self.dismissing:return
+            if self.dismissing:
+                return
             self.animation.stop()
-            self.dismissing=True
-            self.setAttribute(Qt.WA_TransparentForMouseEvents,True)
+            self.dismissing = True
+            self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
             self.animation.setDuration(180)
             self.animation.setStartValue(self.geometry())
-            self.animation.setEndValue(self.geometry().translated(0,self.parentWidget().height()-self.y()))
+            self.animation.setEndValue(
+                self.geometry().translated(0, self.parentWidget().height() - self.y())
+            )
             self.animation.start()
         else:
             self.animation.stop()
-            self.dismissing=False
+            self.dismissing = False
             self.hide()

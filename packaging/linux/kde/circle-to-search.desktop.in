@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Circle to Search
+Comment=Circle anything on screen and search with Google Lens
+Exec=@LAUNCHER@
+Icon=circle-to-search
+Terminal=false
+Categories=Utility;
+StartupNotify=false
+Keywords=Google;Lens;OCR;screen;capture;search;

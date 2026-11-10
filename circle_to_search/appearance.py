@@ -1,14 +1,21 @@
-"""App-local Google palettes, following Plasma without changing desktop settings."""
+"""Shared palettes and theme transitions, supplied with a platform theme source."""
 
-import configparser
-import os
-import sys
 from dataclasses import dataclass
-from pathlib import Path
 
-from PySide6.QtCore import QCoreApplication, QFileSystemWatcher, QObject, QSettings, QTimer, Qt, Signal
+from PySide6.QtCore import (
+    QCoreApplication,
+    QFileSystemWatcher,
+    QObject,
+    QSettings,
+    Qt,
+    QTimer,
+    Signal,
+)
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication
+
+from .platforms import get_backend
+from .platforms.base import ThemeSource
 
 
 @dataclass(frozen=True)
@@ -28,25 +35,46 @@ class Theme:
 
     @property
     def dark(self):
-        return self.name == 'dark'
+        return self.name == "dark"
 
 
-LIGHT = Theme('light', '#ffffff', '#f1f3f4', '#202124', '#5f6368', '#9aa0a6',
-              '#dadce0', '#f1f3f4', '#e8eaed', '#4285f4', '#a8c7fa', '#202124')
-DARK = Theme('dark', '#22242a', '#303134', '#e8eaed', '#bdc1c6', '#80868b',
-             '#3c4043', '#3c4043', '#45464a', '#8ab4f8', '#394f73', '#e8eaed')
+LIGHT = Theme(
+    "light",
+    "#ffffff",
+    "#f1f3f4",
+    "#202124",
+    "#5f6368",
+    "#9aa0a6",
+    "#dadce0",
+    "#f1f3f4",
+    "#e8eaed",
+    "#4285f4",
+    "#a8c7fa",
+    "#202124",
+)
+DARK = Theme(
+    "dark",
+    "#22242a",
+    "#303134",
+    "#e8eaed",
+    "#bdc1c6",
+    "#80868b",
+    "#3c4043",
+    "#3c4043",
+    "#45464a",
+    "#8ab4f8",
+    "#394f73",
+    "#e8eaed",
+)
 
 
 def prepare_qt():
-    # KDE's plugin ignores per-app color-scheme overrides; Qt's GTK3 plugin
-    # implements them and notifies WebEngine's native prefers-color-scheme.
-    if sys.platform.startswith('linux'):
-        os.environ['QT_QPA_PLATFORMTHEME'] = 'gtk3'
+    get_backend().prepare_qt()
     QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
 
 
 def theme_manager():
-    return getattr(QApplication.instance(), '_cts_appearance', None)
+    return getattr(QApplication.instance(), "_cts_appearance", None)
 
 
 def current_theme():
@@ -54,59 +82,35 @@ def current_theme():
     return manager.theme if manager else LIGHT
 
 
-def read_config(path):
-    config = configparser.ConfigParser(interpolation=None, strict=False)
-    try:
-        config.read(path, encoding='utf-8')
-    except (OSError, configparser.Error, UnicodeError):
-        pass
-    return config
-
-
-def background_color(config):
-    raw = config.get('Colors:Window', 'BackgroundNormal', fallback='').strip()
-    if ',' in raw:
-        try:
-            channels = [int(value) for value in raw.split(',')[:3]]
-            if len(channels) == 3 and all(0 <= value <= 255 for value in channels):
-                return QColor(*channels)
-        except ValueError:
-            pass
-    color = QColor(raw)
-    return color if color.isValid() else None
-
-
-def plasma_theme(kde_path, data_dirs=None):
-    config = read_config(kde_path)
-    color = background_color(config)
-    if color is None:
-        scheme = config.get('General', 'ColorScheme', fallback='')
-        if scheme and Path(scheme).name == scheme:
-            if data_dirs is None:
-                data_dirs = [Path(os.environ.get('XDG_DATA_HOME', Path.home()/'.local/share'))]
-                data_dirs += [Path(p) for p in os.environ.get('XDG_DATA_DIRS', '/usr/local/share:/usr/share').split(':') if p]
-            for directory in data_dirs:
-                color = background_color(read_config(Path(directory)/'color-schemes'/(scheme+'.colors')))
-                if color is not None:
-                    break
-    return DARK if color is not None and color.lightnessF() < .5 else LIGHT
-
-
 def apply_palette(app, theme):
     palette = QPalette()
     roles = {
-        'Window': theme.background, 'Base': theme.background, 'AlternateBase': theme.surface,
-        'Button': theme.surface, 'ToolTipBase': theme.surface,
-        'WindowText': theme.text, 'Text': theme.text, 'ButtonText': theme.text, 'ToolTipText': theme.text,
-        'PlaceholderText': theme.muted, 'Highlight': theme.selection,
-        'HighlightedText': theme.selection_text, 'Link': theme.accent, 'LinkVisited': theme.accent,
-        'Light': theme.border, 'Midlight': theme.border, 'Mid': theme.border, 'Dark': theme.border,
-        'Shadow': '#000000',
+        "Window": theme.background,
+        "Base": theme.background,
+        "AlternateBase": theme.surface,
+        "Button": theme.surface,
+        "ToolTipBase": theme.surface,
+        "WindowText": theme.text,
+        "Text": theme.text,
+        "ButtonText": theme.text,
+        "ToolTipText": theme.text,
+        "PlaceholderText": theme.muted,
+        "Highlight": theme.selection,
+        "HighlightedText": theme.selection_text,
+        "Link": theme.accent,
+        "LinkVisited": theme.accent,
+        "Light": theme.border,
+        "Midlight": theme.border,
+        "Mid": theme.border,
+        "Dark": theme.border,
+        "Shadow": "#000000",
     }
     for role, color in roles.items():
         palette.setColor(getattr(QPalette.ColorRole, role), QColor(color))
-    for role in ('WindowText', 'Text', 'ButtonText'):
-        palette.setColor(QPalette.ColorGroup.Disabled, getattr(QPalette.ColorRole, role), QColor(theme.disabled))
+    for role in ("WindowText", "Text", "ButtonText"):
+        palette.setColor(
+            QPalette.ColorGroup.Disabled, getattr(QPalette.ColorRole, role), QColor(theme.disabled)
+        )
     app.styleHints().setColorScheme(Qt.ColorScheme.Dark if theme.dark else Qt.ColorScheme.Light)
     app.setPalette(palette)
 
@@ -115,43 +119,54 @@ class ThemeManager(QObject):
     aboutToChange = Signal(object)
     changed = Signal(object)
     modeChanged = Signal(str)
-    MODES = ('auto', 'light', 'dark')
+    MODES = ("auto", "light", "dark")
 
-    def __init__(self, app, mode=None, *, settings=None, kde_path=None, watch=True):
+    def __init__(
+        self, app, mode=None, *, settings=None, source: ThemeSource | None = None, watch=True
+    ):
         super().__init__(app)
         self.app = app
-        self.settings = settings if settings is not None else QSettings('circle-to-search', 'appearance')
-        saved = self.settings.value('theme', 'auto')
-        self.mode = mode if mode in self.MODES else saved if saved in self.MODES else 'auto'
-        self.kde_path = Path(kde_path) if kde_path else Path(os.environ.get('XDG_CONFIG_HOME', Path.home()/'.config'))/'kdeglobals'
-        self.theme = plasma_theme(self.kde_path) if self.mode == 'auto' else DARK if self.mode == 'dark' else LIGHT
+        self.settings = (
+            settings if settings is not None else QSettings("circle-to-search", "appearance")
+        )
+        saved = self.settings.value("theme", "auto")
+        self.mode = mode if mode in self.MODES else saved if saved in self.MODES else "auto"
+        self.source = source or get_backend().theme_source()
+        self.source.setParent(self)
+        self.theme = self.resolve_theme()
         app._cts_appearance = self
         apply_palette(app, self.theme)
-        self.watch_enabled=watch
+        self.watch_enabled = watch
         self.watcher = QFileSystemWatcher(self)
         self.debounce = QTimer(self)
         self.debounce.setSingleShot(True)
         self.debounce.timeout.connect(self.refresh)
         if watch:
+            self.source.changed.connect(self.schedule_refresh)
             self.watcher.fileChanged.connect(self.schedule_refresh)
             self.watcher.directoryChanged.connect(self.schedule_refresh)
             self.watch_paths()
 
     def watch_paths(self):
-        if not self.watch_enabled:return
-        # Plasma commonly writes kdeglobals by replacing it atomically.
-        paths = [self.kde_path, self.kde_path.parent]
-        existing = set(self.watcher.files()+self.watcher.directories())
+        if not self.watch_enabled:
+            return
+        paths = self.source.watch_paths
+        existing = set(self.watcher.files() + self.watcher.directories())
         for path in paths:
             if path.exists() and str(path) not in existing:
                 self.watcher.addPath(str(path))
+
+    def resolve_theme(self):
+        if self.mode == "auto":
+            return DARK if self.source.is_dark() else LIGHT
+        return DARK if self.mode == "dark" else LIGHT
 
     def schedule_refresh(self, *_):
         self.debounce.start(120)
 
     def refresh(self):
         self.watch_paths()
-        target = plasma_theme(self.kde_path) if self.mode == 'auto' else DARK if self.mode == 'dark' else LIGHT
+        target = self.resolve_theme()
         if target == self.theme:
             return
         self.aboutToChange.emit(target)
@@ -161,9 +176,9 @@ class ThemeManager(QObject):
 
     def set_mode(self, mode):
         if mode not in self.MODES:
-            raise ValueError('Unknown appearance mode: '+str(mode))
+            raise ValueError("Unknown appearance mode: " + str(mode))
         self.mode = mode
-        self.settings.setValue('theme', mode)
+        self.settings.setValue("theme", mode)
         self.settings.sync()
         self.refresh()
         self.modeChanged.emit(mode)

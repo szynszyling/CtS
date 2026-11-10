@@ -3,11 +3,15 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "circle-to-search-kde"
-version = "0.12.4"
-description = "Circle anything on your KDE Plasma desktop and search it"
+name = "circle-to-search-desktop"
+dynamic = ["version"]
+description = "Select screen content and search or translate it"
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = ["PySide6>=6.8"]
+
+[project.optional-dependencies]
+dev = ["ruff==0.17.4"]
 
 [project.scripts]
 circle-to-search = "circle_to_search.app:main"
@@ -15,11 +19,25 @@ circle-to-search = "circle_to_search.app:main"
 [tool.setuptools.packages.find]
 include = ["circle_to_search*"]
 
+[tool.setuptools.dynamic]
+version = {attr = "circle_to_search.__version__"}
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+extend-exclude = ["build", "dist"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+"tools/**/*.py" = ["E402"]
+
 [tool.setuptools.package-data]
 circle_to_search = ["icons/*.svg", "icons/*.png", "tessdata/*.traineddata", "tessdata/LICENSE", "tessdata/models.json"]
 
 [tool.setuptools.data-files]
-"share/circle-to-search/server" = ["server/Dockerfile", "server/pyproject.toml", "server/requirements.lock", "server/README.md", "server/THIRD_PARTY.md", "server/REMOTE_ACCESS.md", "server/compose.yaml", "server/compose.build.yaml", "server/compose.swag.yaml"]
+"share/circle-to-search/server" = ["server/Dockerfile", "server/pyproject.toml", "server/requirements.lock", "server/README.md", "server/DEVELOPMENT.md", "server/THIRD_PARTY.md", "server/REMOTE_ACCESS.md", "server/compose.yaml", "server/compose.build.yaml", "server/compose.swag.yaml"]
 "share/circle-to-search/server/swag" = ["server/swag/*.sample"]
 "share/circle-to-search/server/cts_ocr_server" = ["server/cts_ocr_server/*.py", "server/cts_ocr_server/models.json"]
 "share/circle-to-search/server/tests" = ["server/tests/*.py"]

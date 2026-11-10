@@ -12,6 +12,7 @@ circle_to_search/tessdata/*.traineddata
 server/**/models/
 .coverage
 .pytest_cache/
+.ruff_cache/
 .agents/
 .codex/
 .aws/

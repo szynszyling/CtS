@@ -12,9 +12,8 @@ from PySide6.QtCore import QPointF, QRectF, Qt, QThreadPool
 from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPainterPath
 from PySide6.QtWidgets import QApplication
 
-from circle_to_search.ui import SelectionOverlay
-from circle_to_search.gestures import resolve_gesture
 from circle_to_search.ocr import recognize_document
+from circle_to_search.ui import SelectionOverlay
 
 
 def sample_image(width=1440, height=900):
@@ -66,33 +65,39 @@ def sample_image(width=1440, height=900):
 
 def main():
     app = QApplication([])
-    output = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("/tmp/circle-to-search-v2-previews")
+    output = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("/tmp/circle-to-search-previews")
     output.mkdir(parents=True, exist_ok=True)
     image = sample_image()
     image.save(str(output / "sample.png"))
     document = recognize_document(image)
-    overlay = SelectionOverlay(image, app.primaryScreen(),document=document,start_ocr=False,auto_search=False)
+    overlay = SelectionOverlay(
+        image, app.primaryScreen(), document=document, start_ocr=False, auto_search=False
+    )
     overlay.resize(1440, 900)
     overlay.show()
     app.processEvents()
-    overlay.created_at-=2
+    overlay.created_at -= 2
     overlay.grab().save(str(output / "initial.png"))
-    overlay.points = [QPointF(1010 + 220 * math.cos(i * math.tau / 96), 440 + 240 * math.sin(i * math.tau / 96)) for i in range(97)]
+    overlay.points = [
+        QPointF(1010 + 220 * math.cos(i * math.tau / 96), 440 + 240 * math.sin(i * math.tau / 96))
+        for i in range(97)
+    ]
     overlay.grab().save(str(output / "gesture.png"))
-    overlay.finish_gesture(overlay.points,False)
+    overlay.finish_gesture(overlay.points, False)
     app.processEvents()
     overlay.sheet.animation.stop()
     overlay.sheet.show_sheet(False)
     overlay.grab().save(str(output / "image.png"))
     overlay.clear_selection()
     # OCR coordinates are already in this fixture's logical pixel space.
-    japanese=[g for g in document.glyphs if any('\u3040'<=c<='\u9fff' for c in g.text)]
-    japanese=[g for g in japanese if g.rect.top()>440]
+    japanese = [g for g in document.glyphs if any("\u3040" <= c <= "\u9fff" for c in g.text)]
+    japanese = [g for g in japanese if g.rect.top() > 440]
     if japanese:
-        start,end=japanese[0].rect.center(),japanese[-1].rect.center()
-        overlay.finish_gesture([start,end],False)
+        start, end = japanese[0].rect.center(), japanese[-1].rect.center()
+        overlay.finish_gesture([start, end], False)
         app.processEvents()
-        overlay.sheet.animation.stop();overlay.sheet.show_sheet(False)
+        overlay.sheet.animation.stop()
+        overlay.sheet.show_sheet(False)
         overlay.grab().save(str(output / "japanese.png"))
     QThreadPool.globalInstance().waitForDone()
     print(output)

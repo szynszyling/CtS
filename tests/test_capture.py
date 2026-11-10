@@ -6,7 +6,7 @@ from unittest.mock import patch
 from PySide6.QtCore import QRectF
 from PySide6.QtGui import QImage
 
-from circle_to_search.capture import capture_desktop
+from circle_to_search.platforms.linux.kde.capture import capture_desktop
 
 
 class CaptureTests(unittest.TestCase):
@@ -25,7 +25,13 @@ class CaptureTests(unittest.TestCase):
             image.save(str(output))
             return subprocess.CompletedProcess(command, 0, "", "")
 
-        with patch("circle_to_search.capture.shutil.which", return_value="/usr/bin/spectacle"), patch("circle_to_search.capture.subprocess.run", side_effect=run):
+        with (
+            patch(
+                "circle_to_search.platforms.linux.kde.capture.shutil.which",
+                return_value="/usr/bin/spectacle",
+            ),
+            patch("circle_to_search.platforms.linux.kde.capture.subprocess.run", side_effect=run),
+        ):
             capture = capture_desktop(QRectF(-100, 0, 200, 100), QRectF(0, 0, 100, 100))
         self.assertFalse(paths[0].exists(), "Full desktop capture must be removed before preview")
         self.assertFalse(capture.image.isNull(), "Image must survive deletion of its PNG")
@@ -43,13 +49,16 @@ class CaptureTests(unittest.TestCase):
         self.assertIn("--current", command)
         self.assertNotIn("--scaled", command)
 
-    @patch("circle_to_search.capture.shutil.which", return_value=None)
+    @patch("circle_to_search.platforms.linux.kde.capture.shutil.which", return_value=None)
     def test_missing_spectacle(self, _):
         with self.assertRaisesRegex(RuntimeError, "Install KDE Spectacle"):
             capture_desktop(QRectF(), QRectF())
 
-    @patch("circle_to_search.capture.shutil.which", return_value="spectacle")
-    @patch("circle_to_search.capture.subprocess.run", side_effect=subprocess.TimeoutExpired("spectacle", 25))
+    @patch("circle_to_search.platforms.linux.kde.capture.shutil.which", return_value="spectacle")
+    @patch(
+        "circle_to_search.platforms.linux.kde.capture.subprocess.run",
+        side_effect=subprocess.TimeoutExpired("spectacle", 25),
+    )
     def test_capture_timeout(self, *_):
         with self.assertRaisesRegex(RuntimeError, "timed out"):
             capture_desktop(QRectF(), QRectF())
