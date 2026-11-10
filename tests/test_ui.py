@@ -5,7 +5,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, QThreadPool, QUrl, Signal
 from PySide6.QtGui import QColor, QImage, QPainter
-from PySide6.QtTest import QTest
+from PySide6.QtTest import QSignalSpy, QTest
 from PySide6.QtWidgets import QApplication, QWidget
 
 from circle_to_search.ocr import Document, Glyph
@@ -690,8 +690,9 @@ class OverlayTests(unittest.TestCase):
         browser.probes.pop()(False)
         QTest.qWait(70)
         self.assertIs(sheet.content.currentWidget(), sheet.message_page)
+        revealed = QSignalSpy(sheet.content.currentChanged)
         browser.probes.pop()(True)
-        QTest.qWait(70)
+        self.assertTrue(revealed.wait(1000))
         self.assertIs(sheet.content.currentWidget(), browser)
 
     def test_new_tab_stays_covered_despite_an_old_page_ready_callback(self):
