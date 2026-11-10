@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "circle-to-search-ocr-server"
+version = "0.12.0"
+description = "Headless Vulkan OCR service for Circle to Search"
+requires-python = ">=3.10"
+dependencies = [
+  "ncnn==1.0.20261020",
+  "numpy>=1.26,<3",
+  "opencv-python-headless>=4.10,<6",
+  "Pillow>=11,<14",
+  "pyclipper>=1.3,<2",
+  "fastapi>=0.115,<1",
+  "uvicorn>=0.30,<1",
+]
+
+[project.scripts]
+cts-ocr-server = "cts_ocr_server.__main__:main"
+
+[tool.setuptools.package-data]
+cts_ocr_server = ["models.json"]
+
+[tool.setuptools]
+license-files = ["THIRD_PARTY.md"]

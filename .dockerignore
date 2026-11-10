@@ -1,0 +1,8 @@
+**
+!server/
+!server/**
+server/**/__pycache__/
+server/**/*.pyc
+server/.env
+server/.venv/
+server/**/models/

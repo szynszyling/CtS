@@ -1,0 +1,22 @@
+{
+  "PP_OCRv5_mobile_det.ncnn.param": {
+    "url": "https://raw.githubusercontent.com/nihui/ncnn-android-ppocrv5/458269b48a434a4301070f83f7ce90e8fd11180f/app/src/main/assets/PP_OCRv5_mobile_det.ncnn.param",
+    "sha256": "358f459680ae0e7a73e477469e529ce116f68c629019ec7a0b6457d2d9117934"
+  },
+  "PP_OCRv5_mobile_det.ncnn.bin": {
+    "url": "https://raw.githubusercontent.com/nihui/ncnn-android-ppocrv5/458269b48a434a4301070f83f7ce90e8fd11180f/app/src/main/assets/PP_OCRv5_mobile_det.ncnn.bin",
+    "sha256": "857a96bc963725105b78a178dfcc3c0c3db1a7b9eef32244367b2cb105ccf60b"
+  },
+  "PP_OCRv5_mobile_rec.ncnn.param": {
+    "url": "https://raw.githubusercontent.com/nihui/ncnn-android-ppocrv5/458269b48a434a4301070f83f7ce90e8fd11180f/app/src/main/assets/PP_OCRv5_mobile_rec.ncnn.param",
+    "sha256": "f52a6586ac3338d8c350db0c9f3c55ff2ecd3763327f9bc7f0efc091f8a63e74"
+  },
+  "PP_OCRv5_mobile_rec.ncnn.bin": {
+    "url": "https://raw.githubusercontent.com/nihui/ncnn-android-ppocrv5/458269b48a434a4301070f83f7ce90e8fd11180f/app/src/main/assets/PP_OCRv5_mobile_rec.ncnn.bin",
+    "sha256": "49d9907a55ba20fa6637f9f788f66ab00793bc8ce57a733a09dbe86b9a2e3db0"
+  },
+  "ppocrv5_dict.h": {
+    "url": "https://raw.githubusercontent.com/nihui/ncnn-android-ppocrv5/458269b48a434a4301070f83f7ce90e8fd11180f/app/src/main/jni/ppocrv5_dict.h",
+    "sha256": "bb7397a57300fccbf86cf527ad199b12a0a2e3ccec8afc636af2f9ee695bbd11"
+  }
+}

@@ -1,0 +1,25 @@
+services:
+  ocr:
+    image: circle-to-search-ocr:0.12.0
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+      target: final
+    restart: unless-stopped
+    ports:
+      - "${CTS_OCR_BIND:-127.0.0.1}:${CTS_OCR_PORT:-8766}:8766"
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${CTS_OCR_RENDER_GID:?Set CTS_OCR_RENDER_GID to the render device group ID}"
+    environment:
+      CTS_OCR_SERVER_TOKEN: "${CTS_OCR_SERVER_TOKEN:?Set a random server token}"
+    command: ["--host", "0.0.0.0", "--gpu-index", "${CTS_OCR_GPU_INDEX:-0}"]
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 2g
+    cpus: 4.0
