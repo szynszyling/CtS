@@ -8,6 +8,8 @@ Run the small Windows Setup executable from [GitHub Releases](https://github.com
 
 ## Arch Linux
 
+You can use the small **Linux KDE Setup** download from [GitHub Releases](https://github.com/szynszyling/CtS/releases/latest). Install the dependencies listed below, then run `python3 CtS-0.14.1-linux-kde-setup.pyz` from your download folder. Setup fetches and verifies the OCR models and registers the Plasma shortcut.
+
 1. Download this repository using **Code → Download ZIP**, or clone it if you use Git.
 2. Extract it and open a terminal in the project folder.
 3. Install the required software, then run the installer:
