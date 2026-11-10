@@ -35,14 +35,28 @@ def main():
     version = runpy.run_path(str(ROOT / "circle_to_search/__init__.py"))["__version__"]
     output = ROOT / "dist" / f"CtS-{version}-linux-kde-setup.pyz"
     output.parent.mkdir(exist_ok=True)
-    tracked = subprocess.check_output(
-        [
-            "git", "ls-files", "-z", "--", "circle_to_search", "server", "assets",
-            "install.py", "LICENSE", "THIRD_PARTY.md", "tools/__init__.py",
-            "tools/fetch_models.py", "packaging/linux/kde/circle-to-search.desktop.in",
-        ],
-        cwd=ROOT,
-    ).decode().split("\0")
+    tracked = (
+        subprocess.check_output(
+            [
+                "git",
+                "ls-files",
+                "-z",
+                "--",
+                "circle_to_search",
+                "server",
+                "assets",
+                "install.py",
+                "LICENSE",
+                "THIRD_PARTY.md",
+                "tools/__init__.py",
+                "tools/fetch_models.py",
+                "packaging/linux/kde/circle-to-search.desktop.in",
+            ],
+            cwd=ROOT,
+        )
+        .decode()
+        .split("\0")
+    )
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("__main__.py", ENTRY)
         for name in filter(None, tracked):
