@@ -83,6 +83,48 @@ class OverlayTests(unittest.TestCase):
         self.overlay.deleteLater()
         APP.processEvents()
 
+    def test_ocr_settings_are_clickable_children_of_the_overlay(self):
+        cancelled=[]
+        self.overlay.cancelled.connect(lambda:cancelled.append(True))
+        self.overlay.edit_ocr_settings()
+        APP.processEvents()
+        panel=self.overlay.ocr_settings_panel
+        dialog=panel.dialog
+        self.assertFalse(dialog.isWindow())
+        self.assertIs(dialog.window(),self.overlay)
+        self.assertIsNone(APP.activeModalWidget())
+        self.assertTrue(self.overlay.isEnabled())
+        self.assertFalse(self.overlay.search_shortcut.isEnabled())
+        dialog.backend.setCurrentIndex(dialog.backend.findData('server'))
+        self.assertTrue(dialog.url.isEnabled())
+        QTest.mouseClick(self.overlay,Qt.LeftButton,pos=QPoint(80,350))
+        self.assertIsNone(self.overlay.selection)
+        self.overlay.back()
+        APP.processEvents()
+        self.assertIsNone(self.overlay.ocr_settings_panel)
+        self.assertEqual(cancelled,[])
+        self.assertTrue(self.overlay.search_shortcut.isEnabled())
+        QTest.mouseClick(self.overlay,Qt.LeftButton,pos=QPoint(80,350))
+        self.assertIsNotNone(self.overlay.selection)
+
+    def test_saving_embedded_ocr_settings_emits_the_backend_change(self):
+        from circle_to_search.ocr_backend import OcrConfig,configure_ocr,current_config
+        previous=current_config()
+        changed=[]
+        self.overlay.ocrSettingsChanged.connect(lambda:changed.append(True))
+        self.overlay.edit_ocr_settings()
+        APP.processEvents()
+        dialog=self.overlay.ocr_settings_panel.dialog
+        dialog.backend.setCurrentIndex(dialog.backend.findData('server'))
+        dialog.url.setText('http://test-server:8766')
+        try:
+            with patch.object(OcrConfig,'save'):dialog.save_settings()
+            APP.processEvents()
+            self.assertIsNone(self.overlay.ocr_settings_panel)
+            self.assertEqual(changed,[True])
+            self.assertIsNone(APP.activeModalWidget())
+        finally:configure_ocr(previous)
+
     def drag(self, start, end, shift=False):
         mods = Qt.KeyboardModifier.ShiftModifier if shift else Qt.KeyboardModifier.NoModifier
         QTest.mousePress(self.overlay, Qt.MouseButton.LeftButton, mods, QPoint(*start))

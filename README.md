@@ -12,7 +12,7 @@ CtS now has a **Vulkan GPU OCR backend**, supplied as a separate headless Docker
 python3 tools/setup_ocr_docker.py --gpu-name AMD --client
 ```
 
-This builds and starts a local authenticated GPU container and selects it for the desktop app. **⋮ → Text recognition…** offers **Local GPU (managed by CtS)**, **Self-hosted CtS server**, and **Local Tesseract (CPU)**. CtS sets up/starts its local backend when you save Local GPU settings; server mode accepts your server address and token. You can check the actual device and enable optional local fallback. Server mode sends the frozen monitor image and regional crops to your configured server. Local Tesseract remains the default before server configuration.
+This builds and starts a local authenticated GPU container and selects it for the desktop app. **⋮ → Text recognition…** offers **Local GPU (managed by CtS)**, **Self-hosted CtS server**, and **Local Tesseract (CPU)**. CtS sets up/starts its local backend when you save Local GPU settings; server mode accepts your server address and token. You can check the actual device and enable optional local fallback. Settings open inside the fullscreen overlay so Plasma’s overlay layer cannot hide a modal window and block input. **Escape** or **Cancel** closes settings; **Save** applies the selected backend. Server mode sends the frozen monitor image and regional crops to your configured server. Local Tesseract remains the default before server configuration.
 
 On the synthetic 1920×1080 desktop, native GPU selections completed in **322 ms for English** and **226 ms for a Japanese underline** while background OCR continued. The server lets gesture requests interrupt background work between model calls; a full scan no longer holds up every new selection. Timings depend on hardware and content.
 
@@ -126,6 +126,8 @@ Tests cover gestures, exact crop contents, handles, scaling and monitor offsets,
 `python3 tools/theme_smoke.py` verifies native and real browser light/dark preferences, opaque popup/divider pixels, loading frames, live automatic changes and manual overrides using temporary settings and local HTML. It does not change Plasma’s settings or contact Google.
 
 `python3 tools/motion_smoke.py` checks intermediate animation frames and stable fullscreen geometry, traces the actual Wayland layer role, and checks exclusion from the installed KWin Scale/Fade/Popup effect policies. It uses a synthetic desktop and local HTML. The surface check also includes an offline AI Mode layout regression. `python3 tools/ai_smoke.py` verifies a real AI Mode answer with a public test question in the app's own Google session.
+
+`python3 tools/ocr_settings_smoke.py` opens Text recognition through the native three-dot menu, checks backend/address input over an accelerated results view, and verifies Save, Escape and restored selection input. It uses synthetic content and local HTML, with settings writes intercepted.
 
 `python3 tools/interaction_smoke.py` routes pointer events through the real native window to check bar/sheet dragging, input blocking before browser loading completes, and selecting uncovered areas. It uses a synthetic desktop and local HTML without capture or network requests.
 

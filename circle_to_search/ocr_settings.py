@@ -1,7 +1,7 @@
 """Native connection settings for local and self-hosted text recognition."""
 
-from PySide6.QtCore import QThreadPool
-from PySide6.QtWidgets import QCheckBox,QComboBox,QDialog,QDialogButtonBox,QFormLayout,QLabel,QLineEdit,QPushButton,QSpinBox,QVBoxLayout
+from PySide6.QtCore import QThreadPool,QTimer,Qt,Signal
+from PySide6.QtWidgets import QCheckBox,QComboBox,QDialog,QDialogButtonBox,QFormLayout,QHBoxLayout,QLabel,QLineEdit,QPushButton,QScrollArea,QSpinBox,QVBoxLayout,QWidget,QFrame
 
 from .appearance import current_theme
 from .ocr_backend import OcrConfig,check_server,configure_ocr,current_config
@@ -129,3 +129,61 @@ class OcrSettingsDialog(QDialog):
             self.status.setText(str(error));return
         configure_ocr(config)
         self.accept()
+
+
+class OcrSettingsPanel(QWidget):
+    """Keep settings in the same Wayland layer surface as the selection UI.
+
+    An application-modal xdg dialog can be below Plasma's overlay layer and
+    block the window that covers it. This child panel needs no native dialog
+    surface or application-wide modal input grab.
+    """
+    finished=Signal(int)
+
+    def __init__(self,parent):
+        super().__init__(parent)
+        self.setObjectName('ocrSettingsCover')
+        self.completed=False
+        self.setAttribute(Qt.WA_NoMousePropagation)
+        self.setAttribute(Qt.WA_StyledBackground)
+        self.setCursor(Qt.ArrowCursor)
+        self.setStyleSheet('QWidget#ocrSettingsCover {background:rgba(0,0,0,120);}')
+        self.dialog=OcrSettingsDialog(self)
+        self.dialog.setWindowFlags(Qt.Widget)
+        self.dialog.setModal(False)
+        heading=QLabel('Text recognition')
+        heading.setStyleSheet('font-size:19px;font-weight:600;')
+        self.dialog.layout().insertWidget(0,heading)
+        self.scroll=QScrollArea(self)
+        self.scroll.setFrameShape(QFrame.NoFrame)
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setWidget(self.dialog)
+        layout=QVBoxLayout(self)
+        layout.setContentsMargins(24,24,24,24)
+        layout.addStretch()
+        row=QHBoxLayout()
+        row.addStretch();row.addWidget(self.scroll);row.addStretch()
+        layout.addLayout(row)
+        layout.addStretch()
+        self.dialog.finished.connect(self.finish)
+        self.setGeometry(parent.rect())
+
+    def resizeEvent(self,event):
+        super().resizeEvent(event)
+        width=max(1,min(620,self.width()-48))
+        self.dialog.setMinimumWidth(min(540,width))
+        self.scroll.setFixedSize(width,max(1,min(self.dialog.sizeHint().height(),self.height()-48)))
+
+    def present(self):
+        self.show()
+        self.raise_()
+        # The triggering menu releases its focus/mouse grab after its action
+        # returns. Give focus to the settings control on the next event turn.
+        QTimer.singleShot(0,self.dialog.backend,lambda:self.dialog.backend.setFocus(Qt.OtherFocusReason))
+
+    def finish(self,result):
+        if self.completed:return
+        self.completed=True
+        self.hide()
+        self.finished.emit(result)
+        self.deleteLater()

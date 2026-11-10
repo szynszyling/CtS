@@ -4,7 +4,7 @@ import time
 
 from PySide6.QtCore import QEasingCurve,QPoint,QPointF,QRectF,Qt,QThreadPool,QTimer,QUrl,QVariantAnimation,Signal
 from PySide6.QtGui import QActionGroup,QColor,QFont,QImage,QKeySequence,QLinearGradient,QPainter,QPainterPath,QPen,QShortcut
-from PySide6.QtWidgets import QApplication,QFileDialog,QLabel,QMenu,QWidget
+from PySide6.QtWidgets import QApplication,QDialog,QFileDialog,QLabel,QMenu,QWidget
 
 from .geometry import pixel_bounds
 from .desktop import configure_overlay
@@ -56,6 +56,7 @@ class SelectionOverlay(QWidget):
         self.bar_top=None
         self.created_at = time.monotonic()
         self.closing=False
+        self.ocr_settings_panel=None
         self.overlay_progress=1.0
         self.selection_progress=1.0
         self.reveal=QVariantAnimation(self)
@@ -95,7 +96,7 @@ class SelectionOverlay(QWidget):
         self.text_actions.translateRequested.connect(self.translate)
         self.sheet = ResultSheet(self, browser_factory)
         self.sheet.cleared.connect(self.clear_selection)
-        self.sheet.presented.connect(self.text_actions.raise_)
+        self.sheet.presented.connect(self.raise_floating_controls)
         self.sheet.externalRequested.connect(self.externalRequested.emit)
         self.sheet.bar.submitted.connect(self.submit)
         self.sheet.bar.imageRequested.connect(self.search_image)
@@ -314,6 +315,9 @@ class SelectionOverlay(QWidget):
         if self.sheet.isVisible() and not self.sheet.dismissing:
             self.sheet.show_sheet(False)
         self.position_text_actions()
+        if self.ocr_settings_panel is not None:
+            self.ocr_settings_panel.setGeometry(self.rect())
+            self.ocr_settings_panel.raise_()
 
     def position_hint(self):
         self.hint.adjustSize()
@@ -328,11 +332,20 @@ class SelectionOverlay(QWidget):
         self.position_hint()
 
     def selection_obscured(self,point):
+        if self.ocr_settings_panel is not None and self.ocr_settings_panel.isVisible():return True
         if self.sheet.blocks_selection(point):return True
         return any(control.isVisible() and control.geometry().contains(point.toPoint())
                    for control in self.chrome_controls()+[self.text_actions])
 
+    def raise_floating_controls(self):
+        self.text_actions.raise_()
+        if self.ocr_settings_panel is not None and self.ocr_settings_panel.isVisible():
+            self.ocr_settings_panel.raise_()
+
     def position_text_actions(self):
+        if self.ocr_settings_panel is not None and self.ocr_settings_panel.isVisible():
+            self.text_actions.dismiss()
+            return
         if not self.selection or self.selection.kind != "text":
             self.text_actions.dismiss()
             return
@@ -644,15 +657,38 @@ class SelectionOverlay(QWidget):
 
     def back(self):
         if self.closing:return
+        if self.ocr_settings_panel is not None:
+            self.ocr_settings_panel.dialog.reject()
+            return
         if self.selection or (self.sheet.isVisible() and not self.sheet.dismissing) or self.pending_gesture:
             self.clear_selection()
         else:
             self.cancelled.emit()
 
     def edit_ocr_settings(self):
-        from .ocr_settings import OcrSettingsDialog
-        dialog=OcrSettingsDialog(self)
-        if dialog.exec()==dialog.Accepted:self.ocrSettingsChanged.emit()
+        if self.ocr_settings_panel is not None:
+            self.ocr_settings_panel.raise_()
+            return
+        from .ocr_settings import OcrSettingsPanel
+        self.dragging=False
+        self.drag_handle=None
+        self.points=[]
+        panel=OcrSettingsPanel(self)
+        self.ocr_settings_panel=panel
+        panel.finished.connect(self.ocr_settings_finished)
+        self.search_shortcut.setEnabled(False)
+        self.vertical_shortcut.setEnabled(False)
+        self.text_actions.dismiss()
+        panel.present()
+
+    def ocr_settings_finished(self,result):
+        panel=self.ocr_settings_panel
+        self.ocr_settings_panel=None
+        self.search_shortcut.setEnabled(True)
+        self.vertical_shortcut.setEnabled(True)
+        self.setFocus(Qt.OtherFocusReason)
+        self.position_text_actions()
+        if result==QDialog.DialogCode.Accepted:self.ocrSettingsChanged.emit()
 
     def show_menu(self):
         menu = QMenu(self)
