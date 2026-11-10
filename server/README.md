@@ -8,7 +8,7 @@ The image includes the OCR models and runtime dependencies. It supports Linux AM
 
 Make any folder on your NAS, such as `~/docker/cts-ocr`, and save the linked file there as **`compose.yaml`**. You can use GitHub’s Raw/Download button or copy its contents into a text editor.
 
-## 2. Fill in three values ⚙️
+## 2. Fill in two values ⚙️
 
 Edit that same file:
 
@@ -16,7 +16,14 @@ Edit that same file:
 | --- | --- |
 | `CTS_OCR_SERVER_TOKEN` | Your existing OCR token, between the quotes. The server refuses to start while this is empty. |
 | `group_add` | Replace `RENDER_GROUP_ID` with the number from `stat -c %g /dev/dri/renderD128`. |
-| Network `name` | Replace `SWAG_NETWORK_NAME` with the existing Docker network used by SWAG. |
+
+The file joins the existing external network **`server`**, which must also be used by SWAG:
+
+```yaml
+networks:
+  server:
+    external: true
+```
 
 You can leave the GPU index at `0` when the correct GPU is the first one. The default detector scale is `2`.
 
@@ -55,7 +62,7 @@ Use the same setup as your other SWAG services:
 - **Upstream protocol:** `http`
 - **Subdomain:** `cts`
 
-SWAG and CtS share the network you entered above. SWAG supplies HTTPS using its existing certificate. The Compose file does not publish the OCR port on the host.
+SWAG and CtS share the existing `server` network. SWAG supplies HTTPS using its existing certificate. The Compose file does not publish the OCR port on the host.
 
 See the [SWAG guide](REMOTE_ACCESS.md) for a copyable Nginx config. If you already have a working CtS proxy, change its upstream name to `cts-ocr` and reload Nginx.
 
@@ -83,14 +90,14 @@ docker compose down
 
 ## Moving from the old checkout-based setup
 
-Copy your current OCR token, render-group number and SWAG network into the single file. Start the new stack, update the SWAG upstream to `cts-ocr`, and check the desktop connection. After that succeeds, stop the old `server-ocr-1` container. The new deployment does not depend on the old checkout.
+Copy your current OCR token and render-group number into the single file. Make sure SWAG uses the existing `server` network. Start the new stack, update the SWAG upstream to `cts-ocr`, and check the desktop connection. After that succeeds, stop the old `server-ocr-1` container. The new deployment does not depend on the old checkout.
 
 ## Troubleshooting
 
 | Symptom | What to check |
 | --- | --- |
 | Registry says “denied” | Run `docker login` with a GitHub classic token that has `read:packages`. |
-| The external network is not found | Enter the name of SWAG’s existing network in `compose.yaml`. |
+| The external network is not found | Check that the existing `server` Docker network is present and SWAG uses it. |
 | The render group is not found | Replace the group placeholder with the numeric render-group ID. |
 | CtS reports HTTP 401 | Check the OCR token; it is not the GitHub registry token. |
 | SWAG reports HTTP 502 | Check the shared network, upstream `cts-ocr:8766` and container logs. |

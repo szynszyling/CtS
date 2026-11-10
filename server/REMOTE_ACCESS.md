@@ -2,7 +2,7 @@
 
 CtS works like other SWAG services: one container on the same Docker network, plus a normal Nginx proxy config. Deploy the backend using just **[compose.yaml](../compose.yaml)** in any folder on your NAS; follow the [single-file setup guide](README.md).
 
-Set its network name to the one SWAG already uses. The upstream is **`cts-ocr:8766`**, using HTTP inside the Docker network. SWAG handles public HTTPS.
+Both CtS and SWAG must use the existing external Docker network **`server`**. The upstream is **`cts-ocr:8766`**, using HTTP inside the Docker network. SWAG handles public HTTPS.
 
 ## Nginx configuration
 

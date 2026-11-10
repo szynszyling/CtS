@@ -14,9 +14,12 @@ from pathlib import Path
 
 
 def run(arguments, **kwargs):
-    return subprocess.run(
-        arguments, capture_output=True, text=True, check=True, timeout=120, **kwargs
-    ).stdout.strip()
+    try:
+        return subprocess.run(
+            arguments, capture_output=True, text=True, check=True, timeout=120, **kwargs
+        ).stdout.strip()
+    except subprocess.CalledProcessError as error:
+        raise RuntimeError(error.stderr.strip() or error.stdout.strip() or str(error)) from error
 
 
 def main():
@@ -49,11 +52,15 @@ def main():
         service["container_name"] = container
         service["restart"] = "no"
         service["environment"]["CTS_OCR_SERVER_TOKEN"] = secrets.token_urlsafe(32)
-        definition["networks"]["proxy"]["name"] = network
+        assert definition["networks"]["server"]["external"]
+        assert set(service["networks"]) == {"server"}
+        definition["networks"]["server"]["name"] = network
         if args.device == "cpu":
             service.pop("devices", None)
             service.pop("group_add", None)
             service["command"] = ["--host", "0.0.0.0", "--device", "cpu"]
+            # Private-repository CI runners can have fewer CPUs than the NAS.
+            service["cpus"] = 1
         else:
             nodes = sorted(Path("/dev/dri").glob("renderD*"))
             if not nodes:

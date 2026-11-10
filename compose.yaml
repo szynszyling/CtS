@@ -1,5 +1,5 @@
 # Save this file as compose.yaml in any folder on your NAS.
-# Edit the OCR token, render-group number and existing SWAG network below.
+# Edit the OCR token and render-group number below. SWAG uses the server network.
 name: cts-ocr
 
 services:
@@ -26,5 +26,5 @@ services:
     networks:
       - server
 networks:
-  server: # Replace with the network your SWAG already uses.
+  server:
     external: true
