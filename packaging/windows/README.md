@@ -1,6 +1,6 @@
 # Circle to Search on Windows 🪟
 
-Download and run **CtS-0.14.0-windows-x64-setup.exe** from [GitHub Releases](https://github.com/szynszyling/CtS/releases/latest). Setup installs for your Windows user and adds a Start menu entry. You can also enable startup at sign-in during setup.
+Download and run the **Windows x64 Setup executable** from [GitHub Releases](https://github.com/szynszyling/CtS/releases/latest). Setup installs for your Windows user and adds a Start menu entry. You can also enable startup at sign-in during setup.
 
 Setup downloads the full app from GitHub during installation. The public release needs no sign-in. If you already have the original release ZIP, place it next to Setup to skip the download. Setup verifies the ZIP before installing.
 
@@ -48,5 +48,5 @@ Run `python install.py` for a per-user source install, `python install.py --star
 With Inno Setup 6.7.4 or later, build the small Setup executable against the exact ZIP uploaded to the matching GitHub release:
 
 ```powershell
-python packaging/windows/build_setup.py dist/CtS-0.14.0-windows-x64.zip --compiler 'C:\Path\To\ISCC.exe'
+python packaging/windows/build_setup.py dist/CtS-0.14.1-windows-x64.zip --compiler 'C:\Path\To\ISCC.exe'
 ```

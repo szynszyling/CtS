@@ -12,6 +12,7 @@ from .geometry import pixel_bounds
 from .ocr import default_languages, find_tesseract
 from .platforms import get_backend
 from .platforms.base import Capture, UnsupportedPlatform
+from .results import close_browser_profile
 from .ui import SelectionOverlay
 from .workers import Task
 
@@ -274,5 +275,6 @@ def main(argv=None):
     # Workers only handle cropped image data after capture. Wait before destroying
     # Qt signal objects, even when the user closes during OCR or an upload.
     QThreadPool.globalInstance().waitForDone()
+    close_browser_profile(app)
     lock.unlock()
     return code

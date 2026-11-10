@@ -14,7 +14,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from shiboken6 import isValid
+from shiboken6 import delete, isValid
 
 from .appearance import current_theme, theme_manager
 from .search import (
@@ -28,6 +28,16 @@ from .search import (
 )
 from .web_scripts import SEARCH_CHROME, SERVICE_THEME, TRANSLATE_CHROME
 from .widgets import IconButton, SearchPill, SearchTabs, SheetHandle
+
+
+def close_browser_profile(app):
+    profile = getattr(app, "_cts_browser_profile", None)
+    if profile is not None:
+        for widget in app.allWidgets():
+            if isValid(widget) and getattr(widget, "profile", None) is profile:
+                delete(widget)
+        delete(profile)
+        app._cts_browser_profile = None
 
 
 def create_browser(parent):
@@ -126,23 +136,24 @@ def create_browser(parent):
             return Page(self.profile(), self, new_window=True)
 
     theme = current_theme()
-    QApplication.instance().styleHints().setColorScheme(
-        Qt.ColorScheme.Dark if theme.dark else Qt.ColorScheme.Light
-    )
+    app = QApplication.instance()
+    app.styleHints().setColorScheme(Qt.ColorScheme.Dark if theme.dark else Qt.ColorScheme.Light)
     view = Browser(parent)
-    profile = QWebEngineProfile("circle-to-search", view)
-    profile.setPersistentCookiesPolicy(
-        QWebEngineProfile.PersistentCookiesPolicy.AllowPersistentCookies
-    )
-    profile.setHttpAcceptLanguage("en-US,en;q=0.9")
-    profile.settings().setUnknownUrlSchemePolicy(
-        QWebEngineSettings.AllowUnknownUrlSchemesFromUserInteraction
-    )
-    cookie = QNetworkCookie(b"SOCS", b"CAI")
-    cookie.setDomain(".google.com")
-    cookie.setPath("/")
+    profile = getattr(app, "_cts_browser_profile", None)
+    first_view = profile is None
+    if first_view:
+        # A dismissed tray session can outlive its overlay while OCR finishes.
+        # All views must share the one profile for this on-disk storage name.
+        profile = QWebEngineProfile("circle-to-search", app)
+        app._cts_browser_profile = profile
+        profile.setPersistentCookiesPolicy(
+            QWebEngineProfile.PersistentCookiesPolicy.AllowPersistentCookies
+        )
+        profile.setHttpAcceptLanguage("en-US,en;q=0.9")
+        profile.settings().setUnknownUrlSchemePolicy(
+            QWebEngineSettings.AllowUnknownUrlSchemesFromUserInteraction
+        )
     page = Page(profile, view)
-    profile.setParent(page)  # destroy the page before its profile
     page.setBackgroundColor(QColor(theme.background))
     page.settings().setAttribute(QWebEngineSettings.WebAttribute.ForceDarkMode, False)
     # The native sheet supplies the search field. Remove only Google's duplicate
@@ -171,8 +182,14 @@ def create_browser(parent):
     page.scripts().insert(navigation_script)
     view.setPage(page)
     view.profile = profile
-    profile.cookieStore().cookieAdded.connect(view.cookie_added)
-    profile.cookieStore().setCookie(cookie, QUrl("https://www.google.com"))
+    if first_view:
+        cookie = QNetworkCookie(b"SOCS", b"CAI")
+        cookie.setDomain(".google.com")
+        cookie.setPath("/")
+        profile.cookieStore().cookieAdded.connect(view.cookie_added)
+        profile.cookieStore().setCookie(cookie, QUrl("https://www.google.com"))
+    else:
+        view.cookie_ready = True
     return view
 
 
@@ -184,6 +201,11 @@ class ResultSheet(QFrame):
 
     def __init__(self, parent, browser_factory=create_browser):
         super().__init__(parent)
+        self.load_deadline = QTimer(self)
+        self.load_deadline.setSingleShot(True)
+        self.load_deadline.setInterval(25000)
+        self.load_deadline.timeout.connect(self.load_timed_out)
+        self.load_expired = False
         self.setObjectName("sheet")
         self.setAttribute(Qt.WA_NoMousePropagation)
         self.theme = current_theme()
@@ -406,6 +428,7 @@ class ResultSheet(QFrame):
         self.show_sheet(True)
 
     def loading(self, text="Searching…"):
+        self.load_expired = False
         self.display_generation += 1
         self.current_url = ""
         self.last_error_code = 0
@@ -421,11 +444,13 @@ class ResultSheet(QFrame):
         self.show_sheet()
 
     def error(self, text):
+        self.load_deadline.stop()
         self.message.setText(text)
         self.fallback.setVisible(bool(self.current_url))
         self.content.setCurrentWidget(self.message_page)
 
     def load_url(self, url):
+        self.load_expired = False
         url = normalize_search_url(url)
         self.current_url = url
         self.last_error_code = 0
@@ -440,6 +465,7 @@ class ResultSheet(QFrame):
         try:
             self.ensure_browser()
             self.content.setCurrentWidget(self.message_page)
+            self.load_deadline.start()
             self.browser.load(QUrl(url))
         except ImportError:
             self.error(
@@ -479,6 +505,7 @@ class ResultSheet(QFrame):
                 self.content.setCurrentWidget(self.message_page)
                 self.preferred_redirects.add(preferred.toString())
                 self.navigation_in_progress = True
+                self.load_deadline.start()
                 QTimer.singleShot(0, lambda: self.browser.load(preferred))
 
     def navigate_tab(self, tab):
@@ -509,12 +536,13 @@ class ResultSheet(QFrame):
             self.content.setCurrentWidget(self.message_page)
             # The upload and resulting search use the same browser profile,
             # verification cookies and connection, preserving the Lens session.
+            self.load_deadline.start()
             self.browser.upload_image(png, query)
         except ImportError:
             self.error("Install Qt WebEngine for image search here, or use --external.")
 
     def loaded(self, ok):
-        if self.dismissing:
+        if self.dismissing or self.load_expired:
             return
         self.navigation_in_progress = False
         if ok and self.browser:
@@ -542,6 +570,9 @@ class ResultSheet(QFrame):
             QTimer.singleShot(0, self.handle_failed_load)
 
     def navigation_started(self):
+        self.load_expired = False
+        if not self.load_deadline.isActive():
+            self.load_deadline.start()
         self.navigation_in_progress = True
         self.display_generation += 1
         self.last_error_code = 0
@@ -552,6 +583,7 @@ class ResultSheet(QFrame):
 
         def reveal():
             if isValid(self) and generation == self.display_generation and self.isVisible():
+                self.load_deadline.stop()
                 self.content.setCurrentWidget(self.browser)
 
         if not hasattr(self.browser.page(), "runJavaScript"):
@@ -592,7 +624,7 @@ class ResultSheet(QFrame):
         )
 
     def handle_failed_load(self):
-        if not self.isVisible():
+        if not self.isVisible() or self.load_expired:
             return
         if self.last_error_code == -3:  # a previous navigation was superseded
             return
@@ -604,6 +636,8 @@ class ResultSheet(QFrame):
             )
 
     def loading_info(self, info):
+        if self.load_expired:
+            return
         self.last_error_code = info.errorCode()
         if info.errorCode() >= 400 and self.browser:
             # Rate-limit responses may carry real verification forms. A plain
@@ -611,6 +645,7 @@ class ResultSheet(QFrame):
             self.show_http_status(info.errorCode())
 
     def show_http_status(self, code):
+        self.load_deadline.stop()
         self.theme_reload_pending = False
         if code == 429:
             self.content.setCurrentWidget(self.browser)
@@ -634,7 +669,16 @@ class ResultSheet(QFrame):
         if self.current_url:
             self.externalRequested.emit(QUrl(browser_search_url(self.current_url)))
 
+    def load_timed_out(self):
+        self.load_expired = True
+        self.display_generation += 1
+        self.navigation_in_progress = False
+        self.theme_reload_pending = False
+        self.browser.stop()
+        self.error("Google took too long to respond. Try again or open the search in your browser.")
+
     def stop(self, animate=False):
+        self.load_deadline.stop()
         self.theme_reload_pending = False
         self.display_generation += 1
         if self.browser:

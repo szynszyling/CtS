@@ -61,6 +61,19 @@ def english_document():
 
 
 class OverlayTests(unittest.TestCase):
+    def test_stalled_search_offers_browser_and_can_retry(self):
+        sheet = self.overlay.sheet
+        sheet.browser_factory = DelayedBrowser
+        sheet.load_deadline.setInterval(1)
+        sheet.load_url("https://www.google.com/search?q=fixture")
+        QTest.qWait(50)
+        self.assertIn("too long", sheet.message.text())
+        self.assertTrue(sheet.fallback.isVisible())
+        sheet.browser.loadFinished.emit(False)
+        self.assertIn("too long", sheet.message.text())
+        sheet.load_url("https://www.google.com/search?q=retry")
+        self.assertTrue(sheet.load_deadline.isActive())
+
     def setUp(self):
         self.image = QImage(800, 600, QImage.Format.Format_RGB32)
         self.image.fill(QColor("#ff0000"))
