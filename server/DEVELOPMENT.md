@@ -27,6 +27,8 @@ The bounded queue holds at most eight pending requests and serializes GPU submis
 
 From the repository root:
 
+Production users copy only the root `compose.yaml`. The `server/compose*.yaml` files below are optional source-checkout/development configurations, not deployment prerequisites.
+
 ```sh
 docker build --target test -f server/Dockerfile -t circle-to-search-ocr:test .
 docker compose --env-file server/.env -f server/compose.yaml -f server/compose.build.yaml build
@@ -34,6 +36,7 @@ python3 tools/smoke/ocr_server.py --docker circle-to-search-ocr:0.12.3 --gpu-nam
 python3 tools/smoke/ocr_server.py --docker circle-to-search-ocr:0.12.3 --device cpu
 python3 tools/smoke/ocr_server.py --docker circle-to-search-ocr:0.12.3 --gpu-name AMD --detector-scale 1.5
 python3 tools/smoke/ocr_https.py --image circle-to-search-ocr:0.12.3
+python3 tools/smoke/compose.py --image circle-to-search-ocr:0.12.3
 ```
 
 The tests use generated text, including 14px light/dark Japanese and vertical character selection. The HTTPS check uses an isolated Docker network, the exact SWAG virtual host, a temporary trusted test certificate and a CPU reference backend. It checks bearer forwarding, rejection of an invalid token, upload limits and rejection of an untrusted TLS certificate. It does not change a working SWAG container or desktop configuration.

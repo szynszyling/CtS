@@ -89,7 +89,7 @@ Open **⋮ → Text recognition** and choose:
 | **Local GPU (managed by CtS)** | Your computer’s GPU | Docker and a working supported GPU |
 | **Self-hosted CtS server** | Your own server or NAS | Its address and OCR token |
 
-The server is supplied as the **private** image `ghcr.io/szynszyling/cts-ocr:0.12.3`. Follow the [server setup guide](server/README.md) for installation, or the [SWAG guide](server/REMOTE_ACCESS.md) for access through your own HTTPS subdomain.
+For the server, save just **[compose.yaml](compose.yaml)** in a folder on your NAS, fill in its three settings, and run `docker compose up -d`. Docker pulls the **private** image `ghcr.io/szynszyling/cts-ocr:latest`. You do not need a repository clone, `.env` file or source files on the NAS. See the [single-file setup guide](server/README.md) and [SWAG configuration](server/REMOTE_ACCESS.md).
 
 ## A few useful things to know 💡
 

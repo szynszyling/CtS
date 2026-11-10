@@ -1,121 +1,99 @@
-# Run your own OCR server 🐳
+# OCR server: one Compose file 🐳
 
-The OCR server is the part of CtS that reads text from screenshots. Running it on your NAS lets your desktop app use that machine’s hardware.
+Your NAS needs only **[compose.yaml](../compose.yaml)** and the image Docker pulls. No repository clone, Python installation, source build, `.env` file or extra application configuration files are needed.
 
-The ready-made image is **`ghcr.io/szynszyling/cts-ocr:0.12.3`**. It includes the models and all runtime dependencies, so you do not need Python or a source build on the NAS. The image is currently **private** and supports Linux AMD64, including the tested Intel HD 630 server.
+The image includes the OCR models and runtime dependencies. It supports Linux AMD64 with a Vulkan GPU, including the tested Intel HD 630.
 
-## What you need
+## 1. Save the file 📄
 
-- Docker with Docker Compose.
-- A Linux machine with a working Vulkan GPU and `/dev/dri` render device.
-- Access to the private GitHub container image.
-- A copy of the Compose files and `.env.example` from this folder.
+Make any folder on your NAS, such as `~/docker/cts-ocr`, and save the linked file there as **`compose.yaml`**. You can use GitHub’s Raw/Download button or copy its contents into a text editor.
 
-The desktop app itself still needs to be installed on your computer. This container only reads text; Google search results remain part of the desktop app.
+## 2. Fill in three values ⚙️
 
-## 1. Sign in to the image registry 🔑
+Edit that same file:
 
-On the NAS, run:
+| Field | What to enter |
+| --- | --- |
+| `CTS_OCR_SERVER_TOKEN` | Your existing OCR token, between the quotes. The server refuses to start while this is empty. |
+| `group_add` | Replace `RENDER_GROUP_ID` with the number from `stat -c %g /dev/dri/renderD128`. |
+| Network `name` | Replace `SWAG_NETWORK_NAME` with the existing Docker network used by SWAG. |
+
+You can leave the GPU index at `0` when the correct GPU is the first one. The default detector scale is `2`.
+
+If you need a new OCR token, generate one with:
+
+```sh
+openssl rand -hex 32
+```
+
+Keep `compose.yaml` private because it contains your OCR token. You can restrict access with `chmod 600 compose.yaml`.
+
+## 3. Log in and start ✅
+
+The image is currently private. Log in once on the NAS:
 
 ```sh
 docker login ghcr.io --username szynszyling
 ```
 
-At the password prompt, use a **GitHub personal access token (classic)** with **`read:packages`** and access to this package. Your normal GitHub password will not work. [GitHub’s instructions](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-with-a-personal-access-token-classic) explain how to create the token.
+Use a GitHub **personal access token (classic)** with **`read:packages`** as the password. This registry credential is separate from the OCR token in your Compose file. [GitHub’s instructions](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-with-a-personal-access-token-classic) explain how to create it.
 
-This registry token is different from the OCR token you will enter in CtS.
-
-## 2. Fill in the server settings ⚙️
-
-The commands below start from the main CtS project folder. Copy the example settings file once:
+From the folder containing your `compose.yaml`:
 
 ```sh
-cp server/.env.example server/.env
-chmod 600 server/.env
+docker compose up -d
 ```
 
-For an existing installation, keep your current `.env` instead of copying over it.
+Docker downloads `ghcr.io/szynszyling/cts-ocr:latest` and starts the container. No project checkout is involved.
 
-Generate an OCR token inside the image:
+## 4. Point SWAG at it 🌐
+
+Use the same setup as your other SWAG services:
+
+- **Upstream app:** `cts-ocr`
+- **Upstream port:** `8766`
+- **Upstream protocol:** `http`
+- **Subdomain:** `cts`
+
+SWAG and CtS share the network you entered above. SWAG supplies HTTPS using its existing certificate. The Compose file does not publish the OCR port on the host.
+
+See the [SWAG guide](REMOTE_ACCESS.md) for a copyable Nginx config. If you already have a working CtS proxy, change its upstream name to `cts-ocr` and reload Nginx.
+
+In the desktop app, choose **⋮ → Text recognition → Self-hosted CtS server**. Enter your HTTPS address and the OCR token, then check the connection and save.
+
+## Updating and checking it
+
+From the same folder:
 
 ```sh
-docker run --rm --entrypoint python ghcr.io/szynszyling/cts-ocr:0.12.3 -c 'import secrets; print(secrets.token_urlsafe(32))'
+docker compose pull
+docker compose up -d
 ```
 
-Find the GPU’s render-group number:
+`latest` points to the most recent tested release. To pin a particular release, change the image line to a version such as `ghcr.io/szynszyling/cts-ocr:0.12.3`.
+
+Useful commands:
 
 ```sh
-stat -c %g /dev/dri/renderD128
+docker compose ps
+docker compose logs --tail 30 ocr
+docker compose run --rm ocr --list-devices
+docker compose down
 ```
 
-Open `server/.env` in a text editor and fill in:
+## Moving from the old checkout-based setup
 
-| Setting | What to enter |
-| --- | --- |
-| `CTS_OCR_SERVER_TOKEN` | The OCR token you just generated |
-| `CTS_OCR_RENDER_GID` | The number printed by `stat` |
-| `CTS_OCR_GPU_INDEX` | Usually `0`; see the device check below if you have several GPUs |
+Copy your current OCR token, render-group number and SWAG network into the single file. Start the new stack, update the SWAG upstream to `cts-ocr`, and check the desktop connection. After that succeeds, stop the old `server-ocr-1` container. The new deployment does not depend on the old checkout.
 
-If the render device is missing, the GPU/driver needs attention before the container can use it.
+## Troubleshooting
 
-## 3. Choose how you will connect 🌐
-
-**Already use SWAG?** Follow the [SWAG setup guide](REMOTE_ACCESS.md). It works like other SWAG services: a shared Docker network and a small Nginx configuration. The existing container name can remain your upstream; the provided override also gives it the alias `cts-ocr` on port `8766`.
-
-**Only need access at home?** Set `CTS_OCR_BIND` in `.env` to your NAS’s local IP address, then run:
-
-```sh
-docker compose --env-file server/.env -f server/compose.yaml pull
-docker compose --env-file server/.env -f server/compose.yaml up -d
-```
-
-The default bind address is `127.0.0.1`, which only allows connections from the NAS itself. Use HTTPS or a VPN for access away from home.
-
-To list available GPUs:
-
-```sh
-docker compose --env-file server/.env -f server/compose.yaml run --rm ocr --list-devices
-```
-
-To see whether the server started correctly:
-
-```sh
-docker compose --env-file server/.env -f server/compose.yaml logs --tail 30 ocr
-```
-
-## 4. Connect the desktop app ✅
-
-In CtS open **⋮ → Text recognition → Self-hosted CtS server**.
-
-1. Enter the server address: your HTTPS domain, or `http://YOUR-NAS-IP:8766` on your home network.
-2. Enter the **OCR token** from `.env`.
-3. Click **Check server connection**, then **Save**.
-4. Close and reopen the overlay.
-
-A successful connection reports the GPU in use. Screenshots and nearby selection crops are sent to your server for text recognition.
-
-## Update the image
-
-The Compose file pins a tested release. To choose another release, set `CTS_OCR_IMAGE` in `.env` to its full image name. You can choose `ghcr.io/szynszyling/cts-ocr:latest` if you prefer the newest tested release whenever you update.
-
-Run the same Compose configuration you normally use:
-
-```sh
-docker compose --env-file server/.env -f server/compose.yaml pull
-docker compose --env-file server/.env -f server/compose.yaml up -d
-```
-
-If you use the SWAG override, include `-f server/compose.swag.yaml` in **both** commands. Your GPU, OCR token and network settings stay in `.env`.
-
-## If something goes wrong
-
-| Message or symptom | What to check |
+| Symptom | What to check |
 | --- | --- |
 | Registry says “denied” | Run `docker login` with a GitHub classic token that has `read:packages`. |
-| CtS reports HTTP 401 | Check the OCR token. Do not enter the GitHub registry token in CtS. |
-| SWAG reports HTTP 502 | Check that SWAG and OCR share a Docker network and that the upstream name/port are correct. |
-| Certificate warning | Use a hostname covered by the certificate. A DuckDNS wildcard certificate covers `cts.yourname.duckdns.org`, not necessarily `yourname.duckdns.org`. |
-| The container is unhealthy or restarts | Read its logs. The recognition startup test must pass before it accepts images. |
-| No GPU is found | Check `/dev/dri`, the render-group number and the selected GPU index. |
+| The external network is not found | Enter the name of SWAG’s existing network in `compose.yaml`. |
+| The render group is not found | Replace the group placeholder with the numeric render-group ID. |
+| CtS reports HTTP 401 | Check the OCR token; it is not the GitHub registry token. |
+| SWAG reports HTTP 502 | Check the shared network, upstream `cts-ocr:8766` and container logs. |
+| The container is unhealthy or restarts | Read its logs. GPU initialization and the recognition startup test must succeed. |
 
-Local GPU setup on the desktop is available through **⋮ → Text recognition → Local GPU**. Developer API details, benchmarks, source builds and image publishing are in [DEVELOPMENT.md](DEVELOPMENT.md).
+The desktop app runs on your computer. This container only reads text from screenshots. Developer API details, source builds and image publishing are in [DEVELOPMENT.md](DEVELOPMENT.md).

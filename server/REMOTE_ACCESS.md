@@ -1,77 +1,68 @@
-# Public HTTPS through your existing SWAG
+# CtS through your existing SWAG 🌐
 
-CtS supports a domain, a trusted HTTPS certificate and its existing bearer token. This deployment reuses SWAG for TLS; the OCR container handles recognition and authentication. No second proxy, public OCR port or browser login is needed.
+CtS works like other SWAG services: one container on the same Docker network, plus a normal Nginx proxy config. Deploy the backend using just **[compose.yaml](../compose.yaml)** in any folder on your NAS; follow the [single-file setup guide](README.md).
 
-Use a subdomain such as **`cts.yourname.duckdns.org`**. A certificate for `*.yourname.duckdns.org` covers this hostname, but does not cover `yourname.duckdns.org` itself. This distinction matters for DuckDNS's wildcard certificate mode; see [SWAG's certificate documentation](https://docs.linuxserver.io/images/docker-swag/#validation-and-initial-setup).
+Set its network name to the one SWAG already uses. The upstream is **`cts-ocr:8766`**, using HTTP inside the Docker network. SWAG handles public HTTPS.
 
-## Connect the containers
+## Nginx configuration
 
-Run these commands on the server, from the CtS checkout. The existing SWAG container is called `swag` below; substitute its actual name if different. Keep your current `server/.env` and token. Docker Compose 2.24.4+ is required for the port-reset override. Reuse SWAG's existing network by setting `CTS_OCR_PROXY_NETWORK` to its name; in that case skip the network-create/connect commands.
+Save this as `/config/nginx/proxy-confs/cts.subdomain.conf` inside SWAG’s existing persistent configuration folder:
 
-```sh
-git pull --ff-only
-docker login ghcr.io --username szynszyling
-docker network create cts-proxy
-docker network connect cts-proxy swag
-docker compose --env-file server/.env -f server/compose.yaml -f server/compose.swag.yaml pull
-docker compose --env-file server/.env -f server/compose.yaml -f server/compose.swag.yaml up -d
+```nginx
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name cts.*;
+
+    include /config/nginx/ssl.conf;
+    client_max_body_size 16m;
+
+    location / {
+        include /config/nginx/resolver.conf;
+        set $upstream_app cts-ocr;
+        proxy_pass http://$upstream_app:8766;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Authorization $http_authorization;
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 65s;
+        proxy_read_timeout 65s;
+        proxy_next_upstream off;
+        proxy_request_buffering off;
+        proxy_buffering off;
+    }
+}
 ```
 
-Use a GitHub classic token with `read:packages` at the registry password prompt, separate from your OCR token. The NAS pulls the private `ghcr.io/szynszyling/cts-ocr:0.12.3` image; it no longer builds the backend locally.
+The same config is also available as [cts.subdomain.conf.sample](swag/cts.subdomain.conf.sample). Download/copy that file directly if preferred; no repository clone is needed.
 
-Create/connect the network once; skip those two commands if it already exists and SWAG is attached. `CTS_OCR_PROXY_NETWORK` in `server/.env` can select another existing Docker network. The OCR service receives the network alias `cts-ocr`, which the supplied Nginx configuration resolves at request time.
-
-The override removes all OCR host-port mappings. Your old LAN address on port 8766 will stop working; use the HTTPS address after enabling the route. To persist SWAG's network attachment when its container is **recreated**, add the external network to SWAG's own Compose service as well:
-
-```yaml
-services:
-  swag:
-    # Keep your existing image, volumes, ports and environment here.
-    networks:
-      # Keep any other networks you already use.
-      cts-proxy: {}
-networks:
-  cts-proxy:
-    external: true
-```
-
-If SWAG previously used the implicit default network, explicitly retain `default: {}` under its service's `networks` along with `cts-proxy: {}`. Otherwise its existing upstream services could lose connectivity.
-
-## Enable the SWAG route
-
-The supplied virtual host uses `server_name cts.*` and SWAG's existing `/config/nginx/ssl.conf`. It forwards the bearer header unchanged, permits the API's 16 MiB image limit and avoids writing uploaded PNGs to proxy request-buffer files. It deliberately uses its own API proxy settings rather than including SWAG's general `proxy.conf`, which could define conflicting timeouts.
-
-Copy the file to SWAG's persistent configuration directory. If a `cts.subdomain.conf` already exists, review/back it up before replacing it.
+Check and reload SWAG, substituting its actual container name if different:
 
 ```sh
-docker cp server/swag/cts.subdomain.conf.sample swag:/config/nginx/proxy-confs/cts.subdomain.conf
 docker exec swag nginx -t
 docker exec swag nginx -s reload
 ```
 
-Reload only after the syntax check succeeds. Standard SWAG installations already include `*.subdomain.conf` from their default site configuration. A customized installation must retain that include.
+Reload after the syntax check succeeds. Standard SWAG installations already load `*.subdomain.conf` from this folder. An existing working CtS config only needs its upstream changed to `cts-ocr`.
 
-Make sure the hostname resolves to your home connection and the router forwards **TCP 443 to SWAG's HTTPS port**. Keep your existing certificate-validation forwarding/settings: HTTP validation normally also uses port 80, while DNS validation does not need it. Do not forward port 8766. If the router lacks NAT loopback, use local/split DNS so this same hostname resolves to the NAS at home.
+## Domain and certificate
 
-In CtS open **⋮ → Text recognition → Self-hosted CtS server** and enter:
+Use a hostname such as **`cts.yourname.duckdns.org`**. A certificate for `*.yourname.duckdns.org` covers that hostname, but not `yourname.duckdns.org` itself. See [SWAG’s DuckDNS certificate documentation](https://docs.linuxserver.io/images/docker-swag/#validation-and-initial-setup).
 
-- Server address: `https://cts.yourname.duckdns.org`
-- Server token: your existing OCR token
+Keep the router’s existing TCP 443 forwarding to SWAG. CtS does not need its own forwarded port. Retain SWAG’s current certificate-renewal settings. If the router lacks NAT loopback, local/split DNS can resolve the same hostname to the NAS while at home.
 
-Click **Check server connection**, save, and reopen the overlay. A normal browser request to `/v1/health` without a token should return **401**. An authenticated CtS connection should report your GPU. A welcome page/HTML response means the request reached SWAG's default site rather than this OCR route. A **502** means SWAG could not reach the backend; check the shared network and the OCR container's startup test/logs.
+## Connect CtS
 
-The API uses bearer authentication. Do not put an additional Basic-auth or interactive SSO login in front of this virtual host: CtS sends its own Authorization header and cannot complete a browser login. The desktop verifies the HTTPS hostname and certificate chain; a hostname mismatch must be fixed at the certificate/URL, without disabling verification.
+In the desktop app, choose **Self-hosted CtS server**, enter your HTTPS address and the OCR token from your single Compose file, then check the connection and save.
 
-## Faster recognition
+An unauthenticated browser request to `/v1/health` should return **401**. An authenticated desktop check reports the actual GPU. A welcome page means Nginx selected its default site; a **502** means it could not reach the backend.
 
-Regional crops already avoid waiting for an entire screen scan. On the tested HD 630, identical Japanese text took roughly **393 ms** in a 900×160 image and **193 ms** in a tight 310×45 crop, with about 10–13 ms outside server inference. These are three-request medians on the home LAN, not an off-site latency guarantee.
+CtS uses bearer authentication. An extra Basic-auth or interactive SSO login would conflict with the API’s Authorization header. The desktop verifies the HTTPS hostname and certificate chain.
 
-The default detector enlargement remains `2`, preserving the tested small-text behavior. For an optional speed/accuracy tradeoff, set this in `server/.env` and recreate the service with both Compose files:
+## Optional speed setting
 
-```dotenv
-CTS_OCR_DETECTOR_SCALE=1.5
-```
-
-Lower enlargement reduces detector work on small crops; it may miss tiny text. Character recognition still uses its original full-resolution crop and FP32 Vulkan inference. Startup self-tests run with the selected scale, and health reports `detector_scale`. Test your fonts, kana/kanji and vertical selections before keeping it. `1` is the minimum and `2` the maximum; large captures still have a 1600-pixel detector-side cap. Restore `2` if detection worsens. This does not re-enable the reduced precision that broke HD 630 inference.
-
-Scale `1.5` passed the container/client integration checks on the Radeon 610M, including 14px light/dark Japanese and vertical character selection. Sample requests took about 49–77 ms, compared with 65–90 ms in the earlier scale-2 run. These separate runs are indicative rather than a controlled speedup measurement; scale `1.5` still needs checking on the HD 630.
+The standalone file contains `CTS_OCR_DETECTOR_SCALE: "2"`. You can try `"1.5"`, then run `docker compose up -d` to recreate the service. Lower enlargement reduces detector work on small crops but can miss tiny text. FP32 Vulkan recognition remains enabled. Restore `"2"` if detection worsens.

@@ -3,6 +3,7 @@
 ## Layout
 
 ```text
+compose.yaml                    Standalone production deployment; image only
 circle_to_search/                Shared Qt UI, gestures, OCR clients and search
   platforms/
     base.py                     DesktopBackend and ThemeSource contracts

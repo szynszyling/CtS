@@ -1,0 +1,33 @@
+# Save this file as compose.yaml in any folder on your NAS.
+# Edit the OCR token, render-group number and existing SWAG network below.
+name: cts-ocr
+
+services:
+  ocr:
+    image: ghcr.io/szynszyling/cts-ocr:latest
+    container_name: cts-ocr
+    restart: unless-stopped
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - "RENDER_GROUP_ID" # Replace with: stat -c %g /dev/dri/renderD128
+    environment:
+      CTS_OCR_SERVER_TOKEN: "" # Paste your existing OCR token here; required.
+      CTS_OCR_DETECTOR_SCALE: "2"
+    command: ["--host", "0.0.0.0", "--gpu-index", "0"]
+    networks:
+      proxy:
+        aliases: [cts-ocr]
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 2g
+    cpus: 4.0
+
+networks:
+  proxy:
+    external: true
+    name: "SWAG_NETWORK_NAME" # Replace with the network your SWAG already uses.

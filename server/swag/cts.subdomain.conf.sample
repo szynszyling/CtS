@@ -1,5 +1,5 @@
 # Copy to /config/nginx/proxy-confs/cts.subdomain.conf in your existing SWAG.
-# Both containers must join the cts-proxy network (see REMOTE_ACCESS.md).
+# Both containers must share your SWAG Docker network (see REMOTE_ACCESS.md).
 # Existing SWAG certificate must cover cts.YOUR_DOMAIN.
 server {
     listen 443 ssl;
