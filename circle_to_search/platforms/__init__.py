@@ -11,7 +11,11 @@ def get_backend(platform_name: str | None = None) -> DesktopBackend:
         from .linux.kde import KdeBackend
 
         return KdeBackend()
+    if platform_name == "win32":
+        from .windows import WindowsBackend
+
+        return WindowsBackend()
     raise UnsupportedPlatform(
-        "The desktop app currently supports Linux with KDE Plasma. "
-        "Windows and macOS ports are not available yet."
+        "The desktop app supports Windows and Linux with KDE Plasma. "
+        "The macOS port is not available yet."
     )

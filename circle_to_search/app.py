@@ -4,12 +4,12 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 
-from PySide6.QtCore import QLockFile, QObject, QRectF, QThreadPool, QTimer, QUrl
+from PySide6.QtCore import QLockFile, QObject, QRectF, QThreadPool, QTimer, QUrl, Signal
 from PySide6.QtGui import QCursor, QDesktopServices, QIcon, QImage
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from .geometry import pixel_bounds
-from .ocr import default_languages
+from .ocr import default_languages, find_tesseract
 from .platforms import get_backend
 from .platforms.base import Capture, UnsupportedPlatform
 from .ui import SelectionOverlay
@@ -17,15 +17,20 @@ from .workers import Task
 
 
 class Controller(QObject):
-    def __init__(self, app, args):
+    finished = Signal()
+
+    def __init__(self, app, args, *, quit_on_close=True):
         super().__init__()
         self.app, self.args = app, args
         self.desktop = get_backend()
         self.overlays = []
         self.closing = False
         self.pending_dismissals = set()
+        self.quit_on_close = quit_on_close
 
     def start(self):
+        if self.closing:
+            return
         screens = self.app.screens()
         if not screens:
             self.error("No desktop screen is available.")
@@ -48,13 +53,22 @@ class Controller(QObject):
         QThreadPool.globalInstance().start(self.task)
 
     def captured(self, capture):
+        if self.closing:
+            return
         for screen in self.app.screens():
-            geometry = QRectF(screen.geometry())
-            if not capture.geometry.contains(geometry):
-                continue
-            source = pixel_bounds(geometry, capture.geometry, capture.image.size())
+            screen_rect = screen.geometry()
+            geometry = QRectF(screen_rect)
+            if capture.screen_images:
+                image = capture.screen_images.get((screen_rect.x(), screen_rect.y()))
+                if image is None:
+                    continue
+            else:
+                if not capture.geometry.contains(geometry):
+                    continue
+                source = pixel_bounds(geometry, capture.geometry, capture.image.size())
+                image = capture.image.copy(source)
             overlay = SelectionOverlay(
-                capture.image.copy(source),
+                image,
                 screen,
                 self.args.mode,
                 language=self.args.ocr_language,
@@ -73,13 +87,15 @@ class Controller(QObject):
         self.show_overlays()
 
     def show_overlays(self):
+        active = self.overlays[0]
         for overlay in self.overlays:
             overlay.clear_selection()
             overlay.show_overlay()
             overlay.update()
             if overlay.screen() == self.current:
-                overlay.raise_()
-                overlay.activateWindow()
+                active = overlay
+        active.raise_()
+        active.activateWindow()
 
     def update_ocr(self):
         for overlay in self.overlays:
@@ -95,7 +111,10 @@ class Controller(QObject):
                 overlay.clear_selection()
 
     def error(self, message):
-        print("Circle to Search: " + message, file=sys.stderr)
+        if self.closing:
+            return
+        if sys.stderr is not None:
+            print("Circle to Search: " + message, file=sys.stderr)
         QMessageBox.critical(None, "Circle to Search", message)
         self.quit()
 
@@ -105,7 +124,7 @@ class Controller(QObject):
         self.closing = True
         self.pending_dismissals = {overlay for overlay in self.overlays if overlay.isVisible()}
         if not self.pending_dismissals:
-            self.app.quit()
+            self.finish()
             return
         for overlay in list(self.pending_dismissals):
             overlay.dismissed.connect(lambda overlay=overlay: self.overlay_dismissed(overlay))
@@ -129,13 +148,18 @@ class Controller(QObject):
     def overlay_dismissed(self, overlay):
         self.pending_dismissals.discard(overlay)
         if not self.pending_dismissals:
+            self.finish()
+
+    def finish(self):
+        if self.quit_on_close:
             self.app.quit()
+        self.finished.emit()
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="circle-to-search",
-        description="Circle, highlight, scribble or tap anything on your KDE Plasma desktop.",
+        description="Circle, highlight, scribble or tap anything on your desktop.",
     )
     parser.add_argument("--mode", choices=("circle", "box"), default="circle")
     parser.add_argument(
@@ -161,7 +185,7 @@ def main(argv=None):
     parser.add_argument(
         "--theme",
         choices=("auto", "light", "dark"),
-        help="Appearance override (default: saved preference or Plasma theme)",
+        help="Appearance override (default: saved preference or system theme)",
     )
     parser.add_argument(
         "--ocr-backend",
@@ -172,15 +196,39 @@ def main(argv=None):
     parser.add_argument(
         "--ocr-token-file", type=Path, help="Read the server bearer token from a file"
     )
+    parser.add_argument(
+        "--resident", action="store_true", help="Windows tray launcher and global shortcut"
+    )
+    parser.add_argument(
+        "--background",
+        action="store_true",
+        help="Start the Windows tray without opening a selection",
+    )
+    parser.add_argument("--hotkey", help="Windows global shortcut (default: Meta+Shift+G)")
     args = parser.parse_args(argv)
+    if (args.resident or args.background or args.hotkey) and sys.platform != "win32":
+        parser.error("Tray and global-hotkey options are supported on Windows only.")
+    if args.background:
+        args.resident = True
     try:
         desktop = get_backend()
     except UnsupportedPlatform as error:
         parser.error(str(error))
-    from .ocr_backend import OcrConfig, configure_ocr
+    from .ocr_backend import OcrConfig, configure_ocr, settings_path
 
     try:
         ocr_config = OcrConfig.load()
+        if (
+            sys.platform == "win32"
+            and not args.ocr_backend
+            and not settings_path().exists()
+            and "CTS_OCR_BACKEND" not in os.environ
+            and not find_tesseract()
+        ):
+            from .platforms.windows.ocr import available
+
+            if available():
+                ocr_config = replace(ocr_config, backend="gpu")
         if args.ocr_backend:
             ocr_config = replace(ocr_config, backend=args.ocr_backend)
         if args.ocr_server:
@@ -198,14 +246,30 @@ def main(argv=None):
     app.setApplicationDisplayName("Circle to Search")
     app.setDesktopFileName("io.github.circle_to_search")
     app.setWindowIcon(QIcon.fromTheme("circle-to-search", QIcon.fromTheme("edit-find")))
+    if app.windowIcon().isNull():
+        app.setWindowIcon(QIcon(str(Path(__file__).with_name("icons") / "app.svg")))
     app.setQuitOnLastWindowClosed(False)
     ThemeManager(app, mode=args.theme)
     lock = QLockFile(str(desktop.instance_lock_path()))
     if not lock.tryLock(0):
+        if sys.platform == "win32":
+            if args.background:
+                return 0
+            from .platforms.windows.resident import activate_existing
+
+            if activate_existing():
+                return 0
         print("Circle to Search is already open.", file=sys.stderr)
         return 1
-    controller = Controller(app, args)
-    QTimer.singleShot(0, controller.start)
+    if args.resident:
+        from .platforms.windows.resident import Resident
+
+        controller = Resident(app, args)
+        if not args.background:
+            QTimer.singleShot(0, controller.activate)
+    else:
+        controller = Controller(app, args)
+        QTimer.singleShot(0, controller.start)
     code = app.exec()
     # Workers only handle cropped image data after capture. Wait before destroying
     # Qt signal objects, even when the user closes during OCR or an upload.

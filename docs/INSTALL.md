@@ -1,6 +1,10 @@
 # Install Circle to Search
 
-The desktop app currently supports **Linux with KDE Plasma 6**. Windows and macOS editions are not ready yet.
+The desktop app supports **Windows x64** and **Linux with KDE Plasma 6**. A macOS edition is not available yet.
+
+## Windows
+
+Get the Windows ZIP from [GitHub Releases](https://github.com/szynszyling/CtS/releases/latest). Extract it and open **Circle to Search.exe**, then use **Win + Shift + G**. The [Windows guide](../packaging/windows/README.md) explains the tray, startup and OCR choices.
 
 ## Arch Linux
 

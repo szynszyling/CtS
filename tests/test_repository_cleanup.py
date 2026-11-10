@@ -42,7 +42,12 @@ class CleanupTests(unittest.TestCase):
             root = Path(directory)
             preserved = Path(outside) / "user-file"
             preserved.write_text("keep")
-            (root / "build").symlink_to(outside, target_is_directory=True)
+            try:
+                (root / "build").symlink_to(outside, target_is_directory=True)
+            except OSError as error:
+                if getattr(error, "winerror", None) == 1314:
+                    self.skipTest("Windows requires permission to create symlinks")
+                raise
             clean(root)
             self.assertFalse((root / "build").exists())
             self.assertEqual(preserved.read_text(), "keep")

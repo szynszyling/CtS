@@ -1,14 +1,38 @@
-# Windows packaging — planned
+# Circle to Search on Windows 🪟
 
-No Windows application or installer is shipped yet. This directory is reserved for native installer/build definitions when the Windows desktop adapter exists.
+Download the **Windows x64 ZIP** from [GitHub Releases](https://github.com/szynszyling/CtS/releases/latest). Extract the whole folder, then open **Circle to Search.exe**. Keep the executable and its `_internal` folder together. Python is included in the bundle.
 
-Before enabling a Windows release:
+Press **Win + Shift + G** to open the selection overlay. After you close it, CtS stays in the notification area so the shortcut keeps working. Right-click the tray icon to change the shortcut, start a selection or quit. Windows may put the icon behind the arrow for hidden icons.
 
-- Implement the `DesktopBackend` contract in `circle_to_search/platforms/windows/`.
-- Provide native screen capture and permission/error handling, monitor/DPI mapping, overlay placement, appearance notifications and single-instance handling.
-- Support launching and the global shortcut using Windows integration.
-- Use the shared Qt selection UI, OCR client and search code.
-- Test native capture, text/image selection, browser rendering and link handoff on Windows.
-- Add the installer, update/uninstall behavior and a Windows CI/release job here.
+## Text recognition ⚡
 
-The Linux Docker OCR server can be used remotely by a future Windows client; Windows GPU-container setup is a separate feature and must not inherit `/dev/dri` assumptions.
+- **Local GPU** runs the Vulkan OCR worker on Windows without Docker. The bundle includes the models. Use the GPU name field to select a particular device, such as `AMD` or `NVIDIA`.
+- **Local Tesseract** uses the CPU. Install Tesseract for Windows separately, for example with `scoop install tesseract`. The app includes the English and Japanese language data. It can find Tesseract on `PATH` or in common install locations.
+- **Self-hosted server** connects to the same CtS OCR Docker server used by the Linux desktop app.
+
+Select a backend under **⋮ → Text recognition**. Automatic appearance follows the Windows app theme. Protected video, the lock screen and the secure desktop may not be captured.
+
+## Optional Start menu and sign-in shortcuts
+
+From the extracted folder, run in PowerShell:
+
+```powershell
+& '.\Circle to Search.exe' --install
+```
+
+Add `--startup` to also start the tray at sign-in. To remove the shortcuts, use `--uninstall`. To remove the portable app, quit it from the tray and delete its extracted folder. User preferences and browser data live in Windows user data folders.
+
+## Build from source
+
+Use 64-bit Python 3.12 on Windows:
+
+```powershell
+python -m pip install '.[dev]' ./server pyinstaller
+python tools/fetch_models.py
+python tools/fetch_test_font.py
+python -m circle_to_search --resident
+```
+
+Run `python install.py` for a per-user source install, `python install.py --startup` for sign-in startup, and `python install.py --uninstall` to remove that installation. Quit the tray before updating or uninstalling. This does not remove the checkout or user data.
+
+`python packaging/windows/build.py` creates the versioned ZIP and its SHA-256 checksum under `dist/`. Qt and Python dependencies are bundled alongside the executable. See [third-party notices](https://github.com/szynszyling/CtS/blob/main/THIRD_PARTY.md) for the upstream terms.

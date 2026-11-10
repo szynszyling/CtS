@@ -2,6 +2,7 @@ import contextlib
 import io
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,6 +11,7 @@ from unittest.mock import patch
 from circle_to_search.platforms.linux.kde import installer as install
 
 
+@unittest.skipUnless(sys.platform.startswith("linux"), "KDE installer requires Linux")
 class InstallTests(unittest.TestCase):
     @patch("circle_to_search.platforms.linux.kde.installer.register_shortcut")
     def test_staged_launcher_runs_from_path_with_spaces_without_desktop_mutation(self, register):

@@ -1,4 +1,5 @@
 import json
+import os
 import ssl
 import tempfile
 import unittest
@@ -85,7 +86,12 @@ class BackendTests(unittest.TestCase):
             path = root / "ocr.json"
             other = root / "unrelated-file"
             other.write_text("keep this content")
-            path.with_suffix(".tmp").symlink_to(other)
+            try:
+                path.with_suffix(".tmp").symlink_to(other)
+            except OSError as error:
+                if getattr(error, "winerror", None) == 1314:
+                    self.skipTest("Windows requires permission to create symlinks")
+                raise
             self.config.save(path)
             self.assertEqual(other.read_text(), "keep this content")
             self.assertEqual(OcrConfig.load(path), self.config)
@@ -132,12 +138,13 @@ class BackendTests(unittest.TestCase):
     def test_gpu_mode_preserves_the_explicit_fallback_choice(self):
         configure_ocr(OcrConfig("gpu", fallback=True))
         with (
-            patch("circle_to_search.platforms.linux.ocr.ensure_local", return_value=self.config),
+            patch("circle_to_search.platforms.get_backend") as desktop,
             patch(
                 "circle_to_search.ocr_backend.recognize_remote", side_effect=RuntimeError("offline")
             ),
             patch("circle_to_search.ocr.recognize_tesseract") as local,
         ):
+            desktop.return_value.ensure_local_ocr.return_value = self.config
             recognize_document(self.image)
             local.assert_called_once()
 
@@ -147,7 +154,8 @@ class BackendTests(unittest.TestCase):
             self.config.save(path)
             with patch.dict("os.environ", {}, clear=True):
                 self.assertEqual(OcrConfig.load(path), self.config)
-            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            if os.name != "nt":
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
 
     def test_server_url_rejects_credentials_and_unsafe_schemes(self):
         for url in (

@@ -78,7 +78,9 @@ class ManagedBackendTests(unittest.TestCase):
         def inspect(command, **kwargs):
             context = Path(command[-1])
             observed.extend(
-                str(path.relative_to(context)) for path in context.rglob("*") if path.is_file()
+                path.relative_to(context).as_posix()
+                for path in context.rglob("*")
+                if path.is_file()
             )
 
         with (

@@ -140,8 +140,13 @@ def server_request(config, route, body=None, query=None):
     if body is not None:
         headers["Content-Type"] = "image/png"
     request = urllib.request.Request(url, data=body, headers=headers)
+    handlers = [NoRedirect]
+    if urllib.parse.urlsplit(url).hostname in ("127.0.0.1", "::1", "localhost"):
+        # The local Windows worker and Linux container must never be reached
+        # through an HTTP proxy, which would expose their private OCR requests.
+        handlers.append(urllib.request.ProxyHandler({}))
     try:
-        with urllib.request.build_opener(NoRedirect).open(
+        with urllib.request.build_opener(*handlers).open(
             request, timeout=config.timeout
         ) as response:
             data = response.read(MAX_RESPONSE + 1)

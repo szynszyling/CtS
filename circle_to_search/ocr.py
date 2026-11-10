@@ -1,8 +1,10 @@
 """Local OCR with character boxes, including Japanese horizontal/vertical text."""
 
+import os
 import re
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
@@ -13,6 +15,23 @@ from PySide6.QtGui import QImage
 from .geometry import selection_bounds
 
 MODEL_DIR = Path(__file__).with_name("tessdata")
+
+
+def find_tesseract():
+    binary = shutil.which("tesseract")
+    if binary or sys.platform != "win32":
+        return binary
+    candidates = [
+        Path(sys.executable).parent / "tesseract/tesseract.exe",
+        Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Tesseract-OCR/tesseract.exe",
+        Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Programs/Tesseract-OCR/tesseract.exe",
+        Path.home() / "scoop/apps/tesseract/current/tesseract.exe",
+    ]
+    return next((str(path) for path in candidates if path.is_file()), None)
+
+
+def process_options():
+    return {"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform == "win32" else {}
 
 
 def is_cjk(text: str) -> bool:
@@ -204,7 +223,8 @@ def repair_vertical_boxes(document: Document, image: QImage, line_bounds) -> Doc
 def recognize_tesseract(
     image: QImage, language: str | None = None, vertical: bool = False
 ) -> Document:
-    if not shutil.which("tesseract"):
+    binary = find_tesseract()
+    if not binary:
         raise RuntimeError("Install Tesseract to select text. Image search is still available.")
     language = language or default_languages()
     if vertical:
@@ -223,7 +243,7 @@ def recognize_tesseract(
     prepared.setDotsPerMeterX(11811)
     prepared.setDotsPerMeterY(11811)
     command = [
-        "tesseract",
+        binary,
         "stdin",
         "stdout",
         "-l",
@@ -240,7 +260,11 @@ def recognize_tesseract(
         command.extend(["--tessdata-dir", str(MODEL_DIR)])
     else:
         available = subprocess.run(
-            ["tesseract", "--list-langs"], capture_output=True, text=True, timeout=10
+            [binary, "--list-langs"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            **process_options(),
         ).stdout.splitlines()[1:]
         missing = set(requested) - set(available)
         if missing:
@@ -254,7 +278,11 @@ def recognize_tesseract(
     command.extend(["-c", "tessedit_create_hocr=1"])
     try:
         result = subprocess.run(
-            command, input=encode_png(prepared), capture_output=True, timeout=35
+            command,
+            input=encode_png(prepared),
+            capture_output=True,
+            timeout=35,
+            **process_options(),
         )
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError("Text recognition took too long. Try a smaller selection.") from exc

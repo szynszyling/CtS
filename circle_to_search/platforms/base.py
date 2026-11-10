@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
@@ -18,6 +18,8 @@ from PySide6.QtWidgets import QWidget
 class Capture:
     image: QImage
     geometry: QRectF
+    # Individual captures keyed by the monitor origin in Qt's desktop space.
+    screen_images: dict[tuple[int, int], QImage] = field(default_factory=dict)
 
 
 class ThemeSource(QObject):
@@ -36,6 +38,7 @@ class ThemeSource(QObject):
 
 class DesktopBackend(Protocol):
     name: str
+    gpu_description: str
 
     def prepare_qt(self) -> None: ...
 

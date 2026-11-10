@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from .appearance import current_theme
 from .ocr_backend import OcrConfig, check_server, configure_ocr, current_config
+from .platforms import get_backend
 from .workers import Task
 
 
@@ -30,6 +31,7 @@ class OcrSettingsDialog(QDialog):
         self.setMinimumWidth(540)
         self.setStyleSheet("QDialog {background:" + current_theme().background + ";}")
         self.config = current_config()
+        self.desktop = get_backend()
         self.checking = False
         layout = QVBoxLayout(self)
         description = QLabel(
@@ -99,7 +101,7 @@ class OcrSettingsDialog(QDialog):
             "Set up / check local GPU" if mode == "gpu" else "Check server connection"
         )
         self.privacy.setText(
-            "Local GPU mode keeps OCR on this computer. CtS uses Docker to install and start its backend; first-time setup downloads the models."
+            self.desktop.gpu_description
             if mode == "gpu"
             else "Server mode sends the frozen monitor image and selection crops to your configured CtS backend."
             if mode == "server"
@@ -129,9 +131,7 @@ class OcrSettingsDialog(QDialog):
         self.checking = True
         self.update_enabled()
         if config.backend == "gpu":
-            from .platforms import get_backend
-
-            self.task = Task(get_backend().prepare_local_ocr, config)
+            self.task = Task(self.desktop.prepare_local_ocr, config)
         else:
             self.task = Task(check_server, config)
         self.task.signals.done.connect(self.server_checked)

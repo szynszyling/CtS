@@ -12,8 +12,21 @@ class PlatformTests(unittest.TestCase):
         self.assertEqual(backend.name, "KDE Plasma")
         self.assertEqual(backend.theme_source().label, "Plasma")
 
-    def test_unimplemented_ports_fail_clearly_without_linux_imports(self):
-        for name in ("win32", "darwin"):
+    def test_windows_backend_is_selected_without_linux_imports(self):
+        self.assertEqual(get_backend("win32").name, "Windows")
+        code = """
+import sys
+from circle_to_search.platforms import get_backend
+assert get_backend('win32').name == 'Windows'
+assert not any(name.startswith('circle_to_search.platforms.linux') for name in sys.modules)
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", code], capture_output=True, text=True, timeout=10
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_unimplemented_ports_fail_clearly(self):
+        for name in ("darwin",):
             with (
                 self.subTest(platform=name),
                 self.assertRaisesRegex(UnsupportedPlatform, "not available"),
@@ -23,7 +36,7 @@ class PlatformTests(unittest.TestCase):
 import sys
 from circle_to_search.platforms import get_backend
 try:
-    get_backend('win32')
+    get_backend('darwin')
 except RuntimeError:
     pass
 else:

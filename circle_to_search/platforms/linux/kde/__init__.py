@@ -11,6 +11,7 @@ from .theme import PlasmaThemeSource
 
 class KdeBackend:
     name = "KDE Plasma"
+    gpu_description = "Local GPU mode keeps OCR on this computer. CtS uses Docker to install and start its backend; first-time setup downloads the models."
     capture_desktop = staticmethod(capture_desktop)
     configure_overlay = staticmethod(configure_overlay)
 

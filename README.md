@@ -14,7 +14,7 @@ Search text and images without leaving what you’re doing.</p>
   <a href="docs/DEVELOPMENT.md">Development</a>
 </p>
 
-Press **Meta + Shift + G**, draw around something on your screen, and see Google results in a floating panel. Draw a line through or underneath words to select text instead.
+Press **Meta + Shift + G** on Plasma or **Win + Shift + G** on Windows, draw around something on your screen, and see Google results in a floating panel. Draw a line through or underneath words to select text instead.
 
 <!-- Screenshot slot: add docs/screenshots/overview.png, then uncomment:
 ![Circle to Search showing a selection and search results](docs/screenshots/overview.png)
@@ -36,7 +36,7 @@ Press **Meta + Shift + G**, draw around something on your screen, and see Google
 | System | Status |
 | --- | --- |
 | Linux with KDE Plasma 6 | ✅ Available; tested on Arch Linux and Wayland |
-| Windows | 🗂️ Structure prepared; app not available yet |
+| Windows x64 | ✅ Native overlay, tray shortcut and Vulkan OCR |
 | macOS | 🗂️ Structure prepared; app not available yet |
 | OCR server | 🐳 Available as a Linux AMD64 Docker image |
 
@@ -49,6 +49,8 @@ CtS is a personal project maintained in my spare time. Updates, support and resp
 ## Get started 🚀
 
 ### 1. Install
+
+On **Windows x64**, download the ZIP from [GitHub Releases](https://github.com/szynszyling/CtS/releases/latest), extract it and open **Circle to Search.exe**. The tray icon keeps the global shortcut active. See the [Windows guide](packaging/windows/README.md) for startup shortcuts and local CPU OCR.
 
 On **Arch Linux with KDE Plasma**, download and extract this repository, then open a terminal in its folder and run:
 
@@ -63,7 +65,7 @@ Using another KDE Linux distribution, or updating an existing installation? See 
 
 ### 2. Select something
 
-Press **Meta + Shift + G**. Your screen freezes while you make a selection:
+Press **Meta + Shift + G** (Plasma) or **Win + Shift + G** (Windows). Your screen freezes while you make a selection:
 
 | What you want | What to do |
 | --- | --- |
@@ -90,7 +92,7 @@ Open **⋮ → Text recognition** and choose:
 | Choice | Where it runs | What you need |
 | --- | --- | --- |
 | **Local Tesseract (CPU)** | Your computer | Nothing beyond the normal installation |
-| **Local GPU (managed by CtS)** | Your computer’s GPU | Docker and a working supported GPU |
+| **Local GPU (managed by CtS)** | Your computer’s GPU | A Vulkan GPU; Docker on Linux, native worker on Windows |
 | **Self-hosted CtS server** | Your own server or NAS | Its address and OCR token |
 
 For the server, save just **[compose.yaml](compose.yaml)** in a folder on your NAS, fill in its OCR token and render-group number, and run `docker compose up -d`. CtS joins the existing external Docker network **`server`**, shared with SWAG. Docker pulls `ghcr.io/szynszyling/cts-ocr:latest` from the public registry without a login. You do not need a repository clone, `.env` file or source files on the NAS. See the [single-file setup guide](server/README.md) and [SWAG configuration](server/REMOTE_ACCESS.md).

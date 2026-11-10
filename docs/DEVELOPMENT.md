@@ -76,7 +76,7 @@ The `DesktopBackend` interface covers:
 
 `paths.py` uses Qt’s standard user configuration location. Per-monitor geometry, OCR character coordinates, selection, UI motion and Google navigation stay shared. Do not copy the entire UI for each OS. The server remains a separate Linux Docker application that any future desktop client can call over the same versioned API.
 
-Platform installers/build definitions belong in `packaging/<os>/`. The [Windows](../packaging/windows/README.md) and [macOS](../packaging/macos/README.md) checklists describe what is needed before those editions can be marked supported. There are no placeholder Windows/macOS implementations or release jobs claiming support.
+Platform installers/build definitions belong in `packaging/<os>/`. The [Windows guide](../packaging/windows/README.md) covers the native backend, test dependencies and portable release build. The [macOS checklist](../packaging/macos/README.md) describes that planned port.
 
 ## Releases and generated files
 

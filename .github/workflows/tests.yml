@@ -2,7 +2,7 @@ name: Tests and container releases
 on:
   push:
     branches: [main]
-    tags: ['ocr-v*']
+    tags: ['ocr-v*', 'v*']
   pull_request:
   workflow_dispatch:
 permissions:
@@ -24,6 +24,27 @@ jobs:
       - run: python tools/check_docs.py
       - run: python tools/fetch_models.py
       - run: QT_QPA_PLATFORM=offscreen python -m unittest discover -s tests -v
+  desktop-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: choco install tesseract --yes --no-progress
+      - run: Add-Content -Path $env:GITHUB_PATH -Value "$env:ProgramFiles\Tesseract-OCR"
+      - run: python -m pip install '.[dev]' ./server
+      - run: python tools/fetch_models.py
+      - run: python tools/fetch_test_font.py
+      - name: Shared desktop and Windows tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+          PYTHONIOENCODING: utf-8
+        run: python -m unittest discover -s tests -v
+      - name: Native Windows OCR engine (CPU reference)
+        run: python -m circle_to_search.platforms.windows.ocr_worker --device cpu --self-test --model-dir build/ocr-models
   backend-container:
     needs: desktop
     runs-on: ubuntu-24.04

@@ -1,10 +1,11 @@
 import shutil
 import subprocess
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QImage, QPainter
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QImage, QPainter
 from PySide6.QtWidgets import QApplication
 
 from circle_to_search.gestures import resolve_gesture
@@ -18,6 +19,9 @@ from circle_to_search.ocr import (
 )
 
 APP = QApplication.instance() or QApplication([])
+TEST_FONT = Path(__file__).resolve().parents[1] / "build/test-fonts/NotoSansCJKjp-Regular.otf"
+if TEST_FONT.is_file():
+    QFontDatabase.addApplicationFont(str(TEST_FONT))
 
 
 def japanese_image(text="日本語の文字を選択します", size=18, dark=False):
@@ -34,7 +38,7 @@ def japanese_image(text="日本語の文字を選択します", size=18, dark=Fa
 
 
 class DocumentTests(unittest.TestCase):
-    @patch("circle_to_search.ocr.shutil.which", return_value=None)
+    @patch("circle_to_search.ocr.find_tesseract", return_value=None)
     def test_missing_tesseract_is_reported(self, _):
         with self.assertRaisesRegex(RuntimeError, "Install Tesseract"):
             recognize_document(japanese_image())
