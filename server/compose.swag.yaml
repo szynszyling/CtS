@@ -1,0 +1,13 @@
+# Combine with compose.yaml; requires Docker Compose 2.24.4+ for !reset.
+# SWAG and this service must both join CTS_OCR_PROXY_NETWORK.
+services:
+  ocr:
+    ports: !reset []
+    networks:
+      proxy:
+        aliases: [cts-ocr]
+
+networks:
+  proxy:
+    external: true
+    name: "${CTS_OCR_PROXY_NETWORK:-cts-proxy}"

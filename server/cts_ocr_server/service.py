@@ -99,6 +99,7 @@ def create_app(engine,token=''):
         authorize(request)
         return {'service':'circle-to-search-ocr','api_version':API_VERSION,'status':'ready','engine':'ppocrv5-ncnn',
                 'version':__version__,'precision':engine.precision,'self_test_passed':engine.self_test_passed,
+                'detector_scale':engine.detector_scale,
                 'device':engine.device_name,'gpu_index':engine.gpu_index,
                 'accelerated':engine.device=='vulkan','queued':worker.queue.qsize(),
                 'languages':['eng','jpn','chi_sim','chi_tra'],'character_boxes':True}

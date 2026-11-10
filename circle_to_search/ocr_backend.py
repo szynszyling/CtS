@@ -6,6 +6,7 @@ import math
 import os
 from pathlib import Path
 import socket
+import ssl
 import threading
 import urllib.error
 import urllib.parse
@@ -109,6 +110,8 @@ def server_request(config,route,body=None,query=None):
                  503:'The OCR server is busy. Try again shortly.',504:'The OCR server timed out.'}.get(error.code,f'The OCR server returned HTTP {error.code}.')
         raise RuntimeError(message) from error
     except (urllib.error.URLError,socket.timeout,TimeoutError,OSError) as error:
+        if isinstance(error,ssl.SSLCertVerificationError) or isinstance(getattr(error,'reason',None),ssl.SSLCertVerificationError):
+            raise RuntimeError('The OCR server HTTPS certificate could not be verified. Check the hostname, certificate chain and expiry.') from error
         raise RuntimeError('Could not reach the OCR server. Check its address and connection, or switch to local OCR.') from error
     if len(data)>MAX_RESPONSE:raise RuntimeError('The OCR response exceeded the size limit.')
     try:result=json.loads(data)

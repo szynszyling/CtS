@@ -1,6 +1,6 @@
 services:
   ocr:
-    image: circle-to-search-ocr:0.12.1
+    image: circle-to-search-ocr:0.12.2
     build:
       context: ..
       dockerfile: server/Dockerfile
@@ -14,6 +14,7 @@ services:
       - "${CTS_OCR_RENDER_GID:?Set CTS_OCR_RENDER_GID to the render device group ID}"
     environment:
       CTS_OCR_SERVER_TOKEN: "${CTS_OCR_SERVER_TOKEN:?Set a random server token}"
+      CTS_OCR_DETECTOR_SCALE: "${CTS_OCR_DETECTOR_SCALE:-2}"
     command: ["--host", "0.0.0.0", "--gpu-index", "${CTS_OCR_GPU_INDEX:-0}"]
     read_only: true
     tmpfs:

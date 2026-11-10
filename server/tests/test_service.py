@@ -15,6 +15,7 @@ from cts_ocr_server.service import create_app,InferenceWorker
 class FakeEngine:
     device='vulkan';device_name='test GPU';gpu_index=1
     precision='fp32';self_test_passed=True
+    detector_scale=2.
     def recognize(self,image,vertical=False,on_yield=None):
         return [{'text':'語','bbox':[2,3,10,12],'line':'0','word':'0','confidence':99}]
 
@@ -37,6 +38,7 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(health['device'],'test GPU')
         self.assertEqual(health['precision'],'fp32')
         self.assertTrue(health['self_test_passed'])
+        self.assertEqual(health['detector_scale'],2.)
         result=self.client.post('/v1/ocr?priority=interactive',headers=self.headers,content=png())
         self.assertEqual(result.status_code,200,result.text)
         self.assertEqual((result.json()['width'],result.json()['height']),(64,48))
@@ -100,6 +102,11 @@ class QueueTests(unittest.TestCase):
 
 
 class GeometryTests(unittest.TestCase):
+    def test_detector_scale_rejects_invalid_values_before_loading_models(self):
+        for scale in (0,.9,2.1,float('nan'),float('inf')):
+            with self.subTest(scale=scale),self.assertRaisesRegex(ValueError,'Detector scale'):
+                NcnnEngine('/unused',detector_scale=scale)
+
     def test_corrupt_probabilities_never_decode_into_confident_letters(self):
         for value in (np.nan,np.inf,-np.inf,-.5,1.5):
             with self.subTest(value=value),self.assertRaises(RuntimeError):

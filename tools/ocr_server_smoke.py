@@ -39,6 +39,7 @@ def main():
     parser.add_argument('--model-dir',type=Path,default=Path('/tmp/cts-gpu-models'))
     parser.add_argument('--device',choices=('vulkan','cpu'),default='vulkan')
     parser.add_argument('--gpu-name',default='AMD')
+    parser.add_argument('--detector-scale',type=float,default=2.)
     args=parser.parse_args()
     os.environ.setdefault('QT_QPA_PLATFORM','offscreen')
     app=QApplication([])
@@ -51,7 +52,8 @@ def main():
         environment=os.environ.copy();environment['PYTHONPATH']=str(Path(__file__).resolve().parents[1]/'server')
         environment['VK_LOADER_LAYERS_DISABLE']='VK_LAYER_LSFGVK_frame_generation'
         command=[args.python,'-m','cts_ocr_server','--device',args.device,'--gpu-name',args.gpu_name,
-                 '--model-dir',str(args.model_dir),'--port',str(port),'--token-file',str(token_file)]
+                 '--model-dir',str(args.model_dir),'--port',str(port),'--token-file',str(token_file),
+                 '--detector-scale',str(args.detector_scale)]
         if args.device=='cpu':
             index=command.index('--gpu-name');del command[index:index+2]
         container_name=None
@@ -66,6 +68,7 @@ def main():
                 if not nodes:raise RuntimeError('No render device is available for the GPU container.')
                 command+=['--device','/dev/dri','--group-add',str(nodes[0].stat().st_gid)]
             command+=[args.docker,'--host','0.0.0.0','--device',args.device]
+            command+=['--detector-scale',str(args.detector_scale)]
             if args.device=='vulkan':command+=['--gpu-name',args.gpu_name]
         log=(root/'server.log').open('w+')
         process=subprocess.Popen(command,stdout=log,stderr=subprocess.STDOUT,env=environment)
@@ -80,6 +83,7 @@ def main():
                     time.sleep(.1)
             assert health['accelerated']==(args.device=='vulkan')
             assert health['precision']=='fp32' and health['self_test_passed']
+            assert health['detector_scale']==args.detector_scale
             if args.device=='vulkan':assert args.gpu_name.lower() in health['device'].lower()
             print('Actual backend:',json.dumps(health),flush=True)
             cases=[('English','Circle these words',18,False,False),

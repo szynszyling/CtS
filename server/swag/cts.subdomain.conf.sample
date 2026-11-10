@@ -1,0 +1,34 @@
+# Copy to /config/nginx/proxy-confs/cts.subdomain.conf in your existing SWAG.
+# Both containers must join the cts-proxy network (see REMOTE_ACCESS.md).
+# Existing SWAG certificate must cover cts.YOUR_DOMAIN.
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name cts.*;
+
+    include /config/nginx/ssl.conf;
+    client_max_body_size 16m;
+
+    location / {
+        # Resolve at request time so a backend restart/IP change needs no
+        # SWAG reload. Use CtS's bearer token for this API, without an
+        # interactive login page or another Authorization scheme.
+        include /config/nginx/resolver.conf;
+        set $upstream_app cts-ocr;
+        proxy_pass http://$upstream_app:8766;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Authorization $http_authorization;
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 65s;
+        proxy_read_timeout 65s;
+        proxy_next_upstream off;
+        # Keep uploaded screen images out of Nginx temporary request files.
+        proxy_request_buffering off;
+        proxy_buffering off;
+    }
+}

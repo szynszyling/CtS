@@ -110,13 +110,16 @@ def order_quad(points):
 
 
 class NcnnEngine:
-    def __init__(self,model_dir,device='vulkan',gpu_index=0):
+    def __init__(self,model_dir,device='vulkan',gpu_index=0,detector_scale=2.):
+        if not math.isfinite(detector_scale) or not 1<=detector_scale<=2:
+            raise ValueError('Detector scale must be between 1 and 2.')
         import ncnn
         self.ncnn=ncnn
         self.device=device
         self.gpu_index=gpu_index
         self.precision='fp32'
         self.self_test_passed=False
+        self.detector_scale=detector_scale
         if device not in ('vulkan','cpu'):
             raise ValueError('Device must be vulkan or cpu.')
         if device=='vulkan':
@@ -199,7 +202,7 @@ class NcnnEngine:
         import numpy as np
         import pyclipper
         height,width=image.shape[:2]
-        scale=min(2.,1600/max(height,width))
+        scale=min(self.detector_scale,1600/max(height,width))
         w,h=max(1,round(width*scale)),max(1,round(height*scale))
         resized=cv2.resize(image,(w,h),interpolation=cv2.INTER_LINEAR)
         xpad=(-w)%32;ypad=(-h)%32

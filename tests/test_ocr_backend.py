@@ -1,4 +1,6 @@
 import json
+import ssl
+import urllib.error
 from pathlib import Path
 import tempfile
 import unittest
@@ -76,6 +78,13 @@ class BackendTests(unittest.TestCase):
     def test_server_url_rejects_credentials_and_unsafe_schemes(self):
         for url in ('file:///tmp/image','http://user:password@host','https://server/?token=secret','https://server/#fragment','http://server:invalid'):
             with self.assertRaises(ValueError):OcrConfig('server',url).validated()
+
+    @patch('circle_to_search.ocr_backend.urllib.request.build_opener')
+    def test_invalid_https_certificates_are_reported_without_disabling_validation(self,opener):
+        opener.return_value.open.side_effect=urllib.error.URLError(ssl.SSLCertVerificationError(1,'hostname mismatch'))
+        with self.assertRaisesRegex(RuntimeError,'HTTPS certificate'):
+            server_request(OcrConfig('server','https://cts.test','secret'),'/v1/health')
+        self.assertEqual(opener.return_value.open.call_count,1)
 
     @patch('circle_to_search.ocr_backend.urllib.request.build_opener')
     def test_invalid_api_response_is_reported(self,opener):

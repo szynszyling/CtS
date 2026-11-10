@@ -18,6 +18,8 @@ On the synthetic 1920×1080 desktop, native GPU selections completed in **322 ms
 
 See the [backend deployment guide](server/README.md) for Docker Compose, Intel server setup, SSH tunnels, API details and real GPU checks.
 
+For a public HTTPS subdomain through an existing SWAG container, see [remote access](server/REMOTE_ACCESS.md).
+
 ## Install or update
 
 Requires Python 3.10+, PySide6 (including Qt WebEngine), Spectacle and Tesseract. On Arch Linux:

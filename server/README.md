@@ -25,6 +25,10 @@ docker start circle-to-search-ocr
 
 The helper stores server environment settings and a bearer token in `~/.config/circle-to-search/ocr-server.env`, mode `0600`. Desktop connection settings are in `ocr.json` beside it, also mode `0600`. These paths follow `XDG_CONFIG_HOME`.
 
+## Access away from home
+
+Use the [SWAG HTTPS deployment](REMOTE_ACCESS.md) to expose a subdomain through your existing reverse proxy. The optional Compose override places OCR on a shared Docker network and removes its host-port mappings; SWAG retains TLS and the backend retains bearer authentication. The guide also explains the optional detector-scale setting for faster regional requests.
+
 ## Self-host on the Intel server
 
 Install Docker and the host's Intel graphics/Vulkan driver. The container supplies its own Mesa Vulkan userspace drivers; the host must expose a working `/dev/dri/renderD*` device. No display server is required.
@@ -39,9 +43,9 @@ stat -c %g /dev/dri/renderD128
 Put the generated token and render-node group ID in `server/.env`. The file is gitignored. Build and enumerate the container's devices:
 
 ```sh
-docker build -f server/Dockerfile -t circle-to-search-ocr:0.12.1 .
+docker build -f server/Dockerfile -t circle-to-search-ocr:0.12.2 .
 docker run --rm --device /dev/dri --group-add YOUR_RENDER_GID \
-  circle-to-search-ocr:0.12.1 --list-devices
+  circle-to-search-ocr:0.12.2 --list-devices
 ```
 
 Set `CTS_OCR_GPU_INDEX` to the HD 630's index. For direct LAN access, set `CTS_OCR_BIND` to the server's LAN IP. The default is `127.0.0.1` for an SSH tunnel:
@@ -65,7 +69,7 @@ docker compose --env-file server/.env -f server/compose.yaml up -d --build
 docker compose --env-file server/.env -f server/compose.yaml logs --tail 40 ocr
 ```
 
-Version 0.12.0 was observed returning hundreds of `Y` characters at 100% confidence from unrelated images on an Intel HD 630. Version 0.12.1 forces FP32 tensor storage and arithmetic before loading both networks, while retaining Vulkan GPU execution; the same Intel server then passed English, kana/kanji and vertical-text recognition and selection checks. It also rejects non-finite/out-of-range model probabilities and invalid CTC distributions instead of converting corrupt values into selectable letters. ncnn documents reduced-precision inference as a possible source of incorrect or non-finite output; see its [troubleshooting guide](https://github.com/Tencent/ncnn/wiki/FAQ-ncnn-produce-wrong-result) and [Vulkan precision settings](https://github.com/Tencent/ncnn/wiki/vulkan-notes).
+Version 0.12.0 was observed returning hundreds of `Y` characters at 100% confidence from unrelated images on an Intel HD 630. Since version 0.12.1, FP32 tensor storage and arithmetic are forced before loading both networks, while retaining Vulkan GPU execution; the same Intel server then passed English, kana/kanji and vertical-text recognition and selection checks. The engine also rejects non-finite/out-of-range model probabilities and invalid CTC distributions instead of converting corrupt values into selectable letters. ncnn documents reduced-precision inference as a possible source of incorrect or non-finite output; see its [troubleshooting guide](https://github.com/Tencent/ncnn/wiki/FAQ-ncnn-produce-wrong-result) and [Vulkan precision settings](https://github.com/Tencent/ncnn/wiki/vulkan-notes).
 
 Every startup now recognizes two different known text images and checks a blank image. The server accepts requests only after this passes. Health reports `version`, `precision: "fp32"` and `self_test_passed: true`. A passing smoke test is a basic model/driver check, not a guarantee of accuracy on every screenshot. You can also run the check independently, without starting another HTTP listener:
 
@@ -110,9 +114,13 @@ Server mode sends the frozen monitor image and regional crops to the configured 
 # API, authentication, queue priority, failure paths and geometry tests in Docker
 docker build --target test -f server/Dockerfile -t circle-to-search-ocr:test .
 # Actual GPU/container/client checks; uses synthetic images only
-python3 tools/ocr_server_smoke.py --docker circle-to-search-ocr:0.12.1 --gpu-name AMD
+python3 tools/ocr_server_smoke.py --docker circle-to-search-ocr:0.12.2 --gpu-name AMD
 # Explicit CPU reference integration check
-python3 tools/ocr_server_smoke.py --docker circle-to-search-ocr:0.12.1 --device cpu
+python3 tools/ocr_server_smoke.py --docker circle-to-search-ocr:0.12.2 --device cpu
+# Optional faster detector; test your small text before enabling in production
+python3 tools/ocr_server_smoke.py --docker circle-to-search-ocr:0.12.2 --gpu-name AMD --detector-scale 1.5
+# Exact SWAG virtual host, actual HTTPS, bearer auth and OCR on an isolated network
+python3 tools/ocr_https_smoke.py --image circle-to-search-ocr:0.12.2
 ```
 
 The FP32 Radeon container check measured roughly 65–90 ms per request across these synthetic 900×160 / 180×500 fixtures. The same models in explicit CPU reference mode on the 7800X3D measured roughly 35–51 ms. Full precision costs time compared with the previous reduced-precision run (about 45–60 ms), and this small Radeon is not faster than that CPU on these inputs. The remote HD 630 check measured roughly 310–440 ms including LAN round trips. These are synthetic checks, not guarantees for full-screen captures, arbitrary fonts or remote-network latency.

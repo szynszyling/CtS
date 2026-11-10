@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "circle-to-search-kde"
-version = "0.12.2"
+version = "0.12.3"
 description = "Circle anything on your KDE Plasma desktop and search it"
 requires-python = ">=3.10"
 dependencies = ["PySide6>=6.8"]
@@ -19,6 +19,7 @@ include = ["circle_to_search*"]
 circle_to_search = ["icons/*.svg", "icons/*.png", "tessdata/*.traineddata", "tessdata/LICENSE", "tessdata/models.json"]
 
 [tool.setuptools.data-files]
-"share/circle-to-search/server" = ["server/Dockerfile", "server/pyproject.toml", "server/requirements.lock", "server/README.md", "server/THIRD_PARTY.md"]
+"share/circle-to-search/server" = ["server/Dockerfile", "server/pyproject.toml", "server/requirements.lock", "server/README.md", "server/THIRD_PARTY.md", "server/REMOTE_ACCESS.md", "server/compose.yaml", "server/compose.swag.yaml"]
+"share/circle-to-search/server/swag" = ["server/swag/*.sample"]
 "share/circle-to-search/server/cts_ocr_server" = ["server/cts_ocr_server/*.py", "server/cts_ocr_server/models.json"]
 "share/circle-to-search/server/tests" = ["server/tests/*.py"]
