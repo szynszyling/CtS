@@ -1,6 +1,5 @@
 """Build a versioned, portable Windows x64 release with PyInstaller."""
 
-import hashlib
 import importlib.metadata
 import os
 import shutil
@@ -116,13 +115,6 @@ def main():
     copy_notices(bundle)
     stem = f"CtS-{__version__}-windows-x64"
     archive = Path(shutil.make_archive(str(out / stem), "zip", root_dir=out, base_dir=name))
-    checksum = hashlib.sha256()
-    with archive.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            checksum.update(chunk)
-    archive.with_suffix(".zip.sha256").write_text(
-        f"{checksum.hexdigest()}  {archive.name}\n", encoding="ascii"
-    )
     installed = sum(path.stat().st_size for path in bundle.rglob("*") if path.is_file())
     print(
         f"Built {archive.name}: {archive.stat().st_size / 1e6:.1f} MB download, {installed / 1e6:.1f} MB extracted."

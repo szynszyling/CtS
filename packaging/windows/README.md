@@ -43,7 +43,7 @@ python -m circle_to_search --resident
 
 Run `python install.py` for a per-user source install, `python install.py --startup` for sign-in startup, and `python install.py --uninstall` to remove that installation. Quit the tray before updating or uninstalling. This does not remove the checkout or user data.
 
-`python packaging/windows/build.py` creates the versioned ZIP and its SHA-256 checksum under `dist/`. Qt and Python dependencies are bundled alongside the executable. See [third-party notices](https://github.com/szynszyling/CtS/blob/main/THIRD_PARTY.md) for the upstream terms.
+`python packaging/windows/build.py` creates the versioned ZIP under `dist/`. GitHub displays the SHA-256 digest beside the uploaded asset. Qt and Python dependencies are bundled alongside the executable. See [third-party notices](https://github.com/szynszyling/CtS/blob/main/THIRD_PARTY.md) for the upstream terms.
 
 With Inno Setup 6.7.4 or later, build the small Setup executable against the exact ZIP uploaded to the matching GitHub release:
 
