@@ -6,15 +6,18 @@ Use a subdomain such as **`cts.yourname.duckdns.org`**. A certificate for `*.you
 
 ## Connect the containers
 
-Run these commands on the server, from the CtS checkout. The existing SWAG container is called `swag` below; substitute its actual name if different. Keep your current `server/.env` and token. Docker Compose 2.24.4+ is required for the port-reset override.
+Run these commands on the server, from the CtS checkout. The existing SWAG container is called `swag` below; substitute its actual name if different. Keep your current `server/.env` and token. Docker Compose 2.24.4+ is required for the port-reset override. Reuse SWAG's existing network by setting `CTS_OCR_PROXY_NETWORK` to its name; in that case skip the network-create/connect commands.
 
 ```sh
 git pull --ff-only
-docker build -f server/Dockerfile -t circle-to-search-ocr:0.12.2 .
+docker login ghcr.io --username szynszyling
 docker network create cts-proxy
 docker network connect cts-proxy swag
+docker compose --env-file server/.env -f server/compose.yaml -f server/compose.swag.yaml pull
 docker compose --env-file server/.env -f server/compose.yaml -f server/compose.swag.yaml up -d
 ```
+
+Use a GitHub classic token with `read:packages` at the registry password prompt, separate from your OCR token. The NAS pulls the private `ghcr.io/szynszyling/cts-ocr:0.12.3` image; it no longer builds the backend locally.
 
 Create/connect the network once; skip those two commands if it already exists and SWAG is attached. `CTS_OCR_PROXY_NETWORK` in `server/.env` can select another existing Docker network. The OCR service receives the network alias `cts-ocr`, which the supplied Nginx configuration resolves at request time.
 

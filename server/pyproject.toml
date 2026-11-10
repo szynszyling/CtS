@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "circle-to-search-ocr-server"
-version = "0.12.2"
+version = "0.12.3"
 description = "Headless Vulkan OCR service for Circle to Search"
 requires-python = ">=3.10"
 dependencies = [

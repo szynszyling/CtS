@@ -4,6 +4,29 @@ A headless PP-OCRv5 service using ncnn/Vulkan for neural-network inference. It k
 
 The Radeon 610M (RADV RAPHAEL_MENDOCINO / GFX1036) and a remote Intel HD Graphics 630 (KBL GT2) have passed actual FP32 Vulkan inference checks: English, 14px kana/kanji on light and dark backgrounds, vertical Japanese, character selection through the HTTP client and blank-image rejection. Software Vulkan devices are rejected. GPU mode does not silently replace an unavailable GPU with a CPU pipeline. Image decoding, geometry and some utility operators run on the CPU.
 
+## Published Docker image
+
+**`ghcr.io/szynszyling/cts-ocr:0.12.3`** is the version-pinned server image for Linux AMD64 (including the Intel NAS). Models and runtime dependencies are included; the NAS does not need Python or a source build. `latest` tracks the most recent tested release, and `sha-COMMIT` identifies its source revision. Compose defaults to the pinned version. Set `CTS_OCR_IMAGE` to another release or an immutable `@sha256:...` reference when needed.
+
+The package is **private**, like the repository. Authenticate on the NAS once:
+
+```sh
+docker login ghcr.io --username szynszyling
+```
+
+At the password prompt, use a GitHub **personal access token (classic)** with `read:packages` and permission to this package. This is separate from the OCR server token. See [GitHub's registry authentication instructions](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-with-a-personal-access-token-classic).
+
+With your existing `server/.env`, update without building:
+
+```sh
+docker compose --env-file server/.env -f server/compose.yaml pull
+docker compose --env-file server/.env -f server/compose.yaml up -d
+```
+
+For SWAG, include `-f server/compose.swag.yaml` in both commands so the existing shared network is retained; see [remote access](REMOTE_ACCESS.md). The container service/name stays the same, preserving an existing `server-ocr-1` upstream. Keep your current token, GPU selection and network settings.
+
+The image runs as UID/GID `10001`, includes a health check and verifies both recognition networks before serving. Compose mounts the GPU device, adds the render group, uses a read-only root and temporary cache, and drops Linux capabilities. No configuration or screenshots are baked into the image.
+
 ## Docker on the desktop
 
 From the project root:
@@ -40,18 +63,17 @@ python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
 stat -c %g /dev/dri/renderD128
 ```
 
-Put the generated token and render-node group ID in `server/.env`. The file is gitignored. Build and enumerate the container's devices:
+Put the generated token and render-node group ID in `server/.env`. The file is gitignored. After the registry login above, pull the image and enumerate its devices:
 
 ```sh
-docker build -f server/Dockerfile -t circle-to-search-ocr:0.12.2 .
-docker run --rm --device /dev/dri --group-add YOUR_RENDER_GID \
-  circle-to-search-ocr:0.12.2 --list-devices
+docker compose --env-file server/.env -f server/compose.yaml pull
+docker compose --env-file server/.env -f server/compose.yaml run --rm ocr --list-devices
 ```
 
 Set `CTS_OCR_GPU_INDEX` to the HD 630's index. For direct LAN access, set `CTS_OCR_BIND` to the server's LAN IP. The default is `127.0.0.1` for an SSH tunnel:
 
 ```sh
-docker compose --env-file server/.env -f server/compose.yaml up -d --build
+docker compose --env-file server/.env -f server/compose.yaml up -d
 ssh -N -L 8766:127.0.0.1:8766 user@your-server
 ```
 
@@ -65,7 +87,8 @@ From the checkout on the server, keeping your existing `server/.env`:
 
 ```sh
 git pull --ff-only
-docker compose --env-file server/.env -f server/compose.yaml up -d --build
+docker compose --env-file server/.env -f server/compose.yaml pull
+docker compose --env-file server/.env -f server/compose.yaml up -d
 docker compose --env-file server/.env -f server/compose.yaml logs --tail 40 ocr
 ```
 
@@ -113,15 +136,23 @@ Server mode sends the frozen monitor image and regional crops to the configured 
 ```sh
 # API, authentication, queue priority, failure paths and geometry tests in Docker
 docker build --target test -f server/Dockerfile -t circle-to-search-ocr:test .
+# Optional development build, without registry access
+docker compose --env-file server/.env -f server/compose.yaml -f server/compose.build.yaml build
 # Actual GPU/container/client checks; uses synthetic images only
-python3 tools/ocr_server_smoke.py --docker circle-to-search-ocr:0.12.2 --gpu-name AMD
+python3 tools/ocr_server_smoke.py --docker circle-to-search-ocr:0.12.3 --gpu-name AMD
 # Explicit CPU reference integration check
-python3 tools/ocr_server_smoke.py --docker circle-to-search-ocr:0.12.2 --device cpu
+python3 tools/ocr_server_smoke.py --docker circle-to-search-ocr:0.12.3 --device cpu
 # Optional faster detector; test your small text before enabling in production
-python3 tools/ocr_server_smoke.py --docker circle-to-search-ocr:0.12.2 --gpu-name AMD --detector-scale 1.5
+python3 tools/ocr_server_smoke.py --docker circle-to-search-ocr:0.12.3 --gpu-name AMD --detector-scale 1.5
 # Exact SWAG virtual host, actual HTTPS, bearer auth and OCR on an isolated network
-python3 tools/ocr_https_smoke.py --image circle-to-search-ocr:0.12.2
+python3 tools/ocr_https_smoke.py --image circle-to-search-ocr:0.12.3
 ```
+
+## Publishing a release
+
+Bump the backend version in `server/pyproject.toml`, `cts_ocr_server/__init__.py` and the image defaults, then commit and push. Create and push a matching tag such as `ocr-v0.12.3`. The release workflow first runs the desktop tests, backend tests, model self-tests and real HTTPS/OCR integration check. It publishes that exact tested image to GHCR using the repository's temporary `GITHUB_TOKEN`, then checks that it can be pulled. OCI labels identify the source, version and revision. A mismatched tag fails before publishing. Ordinary `main` and pull-request builds only test; they do not overwrite released image tags.
+
+The publishing helper refuses to push into an existing public package or a package linked to another repository. New GHCR packages start private; visibility is verified after the first push before publishing `latest`. It never changes visibility. Publishing requires no stored registry password in GitHub Actions.
 
 The FP32 Radeon container check measured roughly 65–90 ms per request across these synthetic 900×160 / 180×500 fixtures. The same models in explicit CPU reference mode on the 7800X3D measured roughly 35–51 ms. Full precision costs time compared with the previous reduced-precision run (about 45–60 ms), and this small Radeon is not faster than that CPU on these inputs. The remote HD 630 check measured roughly 310–440 ms including LAN round trips. These are synthetic checks, not guarantees for full-screen captures, arbitrary fonts or remote-network latency.
 

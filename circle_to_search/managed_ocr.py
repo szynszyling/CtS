@@ -15,7 +15,7 @@ import time
 
 from .ocr_backend import OcrConfig,check_server,settings_path
 
-IMAGE='circle-to-search-ocr:0.12.2'
+IMAGE='circle-to-search-ocr:0.12.3'
 NAME='circle-to-search-ocr'
 _LOCK=threading.Lock()
 _CONNECTION=None

@@ -18,6 +18,8 @@ On the synthetic 1920×1080 desktop, native GPU selections completed in **322 ms
 
 See the [backend deployment guide](server/README.md) for Docker Compose, Intel server setup, SSH tunnels, API details and real GPU checks.
 
+The server is distributed as the private image `ghcr.io/szynszyling/cts-ocr:0.12.3`; the NAS can pull releases directly after a GHCR login.
+
 For a public HTTPS subdomain through an existing SWAG container, see [remote access](server/REMOTE_ACCESS.md).
 
 ## Install or update

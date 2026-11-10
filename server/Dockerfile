@@ -39,3 +39,11 @@ RUN python -m unittest discover -s /opt/tests -q
 RUN cts-ocr-server --device cpu --self-test
 
 FROM runtime AS final
+ARG VERSION=0.12.3
+ARG VCS_REF=unknown
+LABEL org.opencontainers.image.title="CtS OCR backend" \
+    org.opencontainers.image.description="Self-hosted English and Japanese character recognition for Circle to Search, using FP32 Vulkan inference" \
+    org.opencontainers.image.source="https://github.com/szynszyling/CtS" \
+    org.opencontainers.image.documentation="https://github.com/szynszyling/CtS/blob/main/server/README.md" \
+    org.opencontainers.image.version="${VERSION}" \
+    org.opencontainers.image.revision="${VCS_REF}"
