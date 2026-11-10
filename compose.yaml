@@ -26,8 +26,8 @@ services:
     pids_limit: 128
     mem_limit: 2g
     cpus: 4.0
-
+    networks:
+      - server
 networks:
-  proxy:
+  server: # Replace with the network your SWAG already uses.
     external: true
-    name: "SWAG_NETWORK_NAME" # Replace with the network your SWAG already uses.
