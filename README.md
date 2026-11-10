@@ -6,7 +6,7 @@ The appearance follows Google's original demonstrations: a neutral scrim, white 
 
 ## GPU OCR and self-hosting
 
-CtS now has a **Vulkan GPU OCR backend**, supplied as a separate headless Docker service. It has been tested on the local Radeon 610M with English, kana/kanji, small dark-background text and vertical Japanese. Models remain loaded between selections; character boxes preserve selection handles and Latin word snapping. The same service can run on your own server, with Intel HD 630 compatibility to be checked against that server’s Vulkan driver.
+CtS now has a **Vulkan GPU OCR backend**, supplied as a separate headless Docker service. FP32 inference has been tested on the local Radeon 610M and a remote Intel HD 630 with English, kana/kanji, small dark-background text and vertical Japanese. Models remain loaded between selections; character boxes preserve selection handles and Latin word snapping. The same service runs locally or on your own server.
 
 ```sh
 python3 tools/setup_ocr_docker.py --gpu-name AMD --client

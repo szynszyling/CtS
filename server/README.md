@@ -2,7 +2,7 @@
 
 A headless PP-OCRv5 service using ncnn/Vulkan for neural-network inference. It keeps its detector and recognizer loaded and returns character positions for English, Japanese kana/kanji and Chinese. It needs no Qt, Tesseract, desktop session, CUDA or ROCm installation.
 
-The local Radeon 610M (RADV RAPHAEL_MENDOCINO) has been tested with actual GPU inference, 14px kana/kanji on light and dark backgrounds, vertical Japanese and character selection through the HTTP client. The Intel HD 630 is an intended deployment target; it still needs to be checked on your server with its own Vulkan driver. Software Vulkan devices are rejected. GPU mode does not silently replace an unavailable GPU with a CPU pipeline. Image decoding, geometry and some utility operators run on the CPU.
+The Radeon 610M (RADV RAPHAEL_MENDOCINO / GFX1036) and a remote Intel HD Graphics 630 (KBL GT2) have passed actual FP32 Vulkan inference checks: English, 14px kana/kanji on light and dark backgrounds, vertical Japanese, character selection through the HTTP client and blank-image rejection. Software Vulkan devices are rejected. GPU mode does not silently replace an unavailable GPU with a CPU pipeline. Image decoding, geometry and some utility operators run on the CPU.
 
 ## Docker on the desktop
 
@@ -65,7 +65,7 @@ docker compose --env-file server/.env -f server/compose.yaml up -d --build
 docker compose --env-file server/.env -f server/compose.yaml logs --tail 40 ocr
 ```
 
-Version 0.12.0 was observed returning hundreds of `Y` characters at 100% confidence from unrelated images on an Intel HD 630. Version 0.12.1 forces FP32 tensor storage and arithmetic before loading both networks, while retaining Vulkan GPU execution. It rejects non-finite/out-of-range model probabilities and invalid CTC distributions instead of converting corrupt values into selectable letters. ncnn documents reduced-precision inference as a possible source of incorrect or non-finite output; see its [troubleshooting guide](https://github.com/Tencent/ncnn/wiki/FAQ-ncnn-produce-wrong-result) and [Vulkan precision settings](https://github.com/Tencent/ncnn/wiki/vulkan-notes).
+Version 0.12.0 was observed returning hundreds of `Y` characters at 100% confidence from unrelated images on an Intel HD 630. Version 0.12.1 forces FP32 tensor storage and arithmetic before loading both networks, while retaining Vulkan GPU execution; the same Intel server then passed English, kana/kanji and vertical-text recognition and selection checks. It also rejects non-finite/out-of-range model probabilities and invalid CTC distributions instead of converting corrupt values into selectable letters. ncnn documents reduced-precision inference as a possible source of incorrect or non-finite output; see its [troubleshooting guide](https://github.com/Tencent/ncnn/wiki/FAQ-ncnn-produce-wrong-result) and [Vulkan precision settings](https://github.com/Tencent/ncnn/wiki/vulkan-notes).
 
 Every startup now recognizes two different known text images and checks a blank image. The server accepts requests only after this passes. Health reports `version`, `precision: "fp32"` and `self_test_passed: true`. A passing smoke test is a basic model/driver check, not a guarantee of accuracy on every screenshot. You can also run the check independently, without starting another HTTP listener:
 
@@ -115,6 +115,6 @@ python3 tools/ocr_server_smoke.py --docker circle-to-search-ocr:0.12.1 --gpu-nam
 python3 tools/ocr_server_smoke.py --docker circle-to-search-ocr:0.12.1 --device cpu
 ```
 
-The FP32 Radeon container check measured roughly 65–90 ms per request across these synthetic 900×160 / 180×500 fixtures. The same models in explicit CPU reference mode on the 7800X3D measured roughly 35–51 ms. Full precision costs time compared with the previous reduced-precision run (about 45–60 ms), and this small Radeon is not faster than that CPU on these inputs. These are synthetic checks, not guarantees for full-screen captures, arbitrary fonts or remote-network latency. Successful FP32 HD 630 inference and its performance still need verification on the server.
+The FP32 Radeon container check measured roughly 65–90 ms per request across these synthetic 900×160 / 180×500 fixtures. The same models in explicit CPU reference mode on the 7800X3D measured roughly 35–51 ms. Full precision costs time compared with the previous reduced-precision run (about 45–60 ms), and this small Radeon is not faster than that CPU on these inputs. The remote HD 630 check measured roughly 310–440 ms including LAN round trips. These are synthetic checks, not guarantees for full-screen captures, arbitrary fonts or remote-network latency.
 
 See [third-party sources and licenses](THIRD_PARTY.md).
