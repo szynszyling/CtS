@@ -30,7 +30,7 @@ def docker(*arguments, **kwargs):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--image", default="circle-to-search-ocr:0.12.3")
+    parser.add_argument("--image", default="circle-to-search-ocr:0.12.4")
     parser.add_argument("--nginx-image", default="nginx:stable-alpine")
     args = parser.parse_args()
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")

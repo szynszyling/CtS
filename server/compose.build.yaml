@@ -1,7 +1,7 @@
 # Optional source build instead of pulling the published GHCR image.
 services:
   ocr:
-    image: circle-to-search-ocr:0.12.3
+    image: circle-to-search-ocr:0.12.4
     build:
       context: ..
       dockerfile: server/Dockerfile

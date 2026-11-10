@@ -35,15 +35,9 @@ openssl rand -hex 32
 
 Keep `compose.yaml` private because it contains your OCR token. You can restrict access with `chmod 600 compose.yaml`.
 
-## 3. Log in and start ✅
+## 3. Start ✅
 
-The image is currently private. Log in once on the NAS:
-
-```sh
-docker login ghcr.io --username szynszyling
-```
-
-Use a GitHub **personal access token (classic)** with **`read:packages`** as the password. This registry credential is separate from the OCR token in your Compose file. [GitHub’s instructions](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-with-a-personal-access-token-classic) explain how to create it.
+The image is public. No GitHub account, registry login or GitHub access token is needed. The OCR token in your Compose file still protects your running server.
 
 From the folder containing your `compose.yaml`:
 
@@ -77,7 +71,7 @@ docker compose pull
 docker compose up -d
 ```
 
-`latest` points to the most recent tested release. To pin a particular release, change the image line to a version such as `ghcr.io/szynszyling/cts-ocr:0.12.3`.
+`latest` points to the most recent tested release. To pin a particular release, change the image line to a version such as `ghcr.io/szynszyling/cts-ocr:0.12.4`.
 
 Useful commands:
 
@@ -96,7 +90,7 @@ Copy your current OCR token and render-group number into the single file. Make s
 
 | Symptom | What to check |
 | --- | --- |
-| Registry says “denied” | Run `docker login` with a GitHub classic token that has `read:packages`. |
+| Registry says “denied” | Check the image name. Public pulls need no login; an expired saved registry login may need refreshing or removing. |
 | The external network is not found | Check that the existing `server` Docker network is present and SWAG uses it. |
 | The render group is not found | Replace the group placeholder with the numeric render-group ID. |
 | CtS reports HTTP 401 | Check the OCR token; it is not the GitHub registry token. |

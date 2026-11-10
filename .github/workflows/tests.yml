@@ -70,4 +70,4 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IMAGE: ${{ steps.image.outputs.image }}
           VERSION: ${{ steps.image.outputs.version }}
-        run: python tools/publish_ocr_image.py --image "$IMAGE" --version "$VERSION"
+        run: python tools/publish_ocr_image.py --image "$IMAGE" --version "$VERSION" --visibility public

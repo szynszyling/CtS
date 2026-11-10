@@ -16,7 +16,8 @@ RUN apt-get update \
 WORKDIR /opt/cts-ocr
 COPY server/requirements.lock /tmp/requirements.lock
 RUN python -m pip install --no-cache-dir --require-hashes -r /tmp/requirements.lock
-COPY server/pyproject.toml server/THIRD_PARTY.md server/README.md ./
+COPY server/pyproject.toml server/LICENSE server/THIRD_PARTY.md server/README.md ./
+COPY server/licenses ./licenses
 COPY server/cts_ocr_server ./cts_ocr_server
 RUN python -m pip install --no-cache-dir --no-deps . \
     && python -m cts_ocr_server --download-models --model-dir /opt/cts-models \
@@ -39,9 +40,10 @@ RUN python -m unittest discover -s /opt/tests -q
 RUN cts-ocr-server --device cpu --self-test
 
 FROM runtime AS final
-ARG VERSION=0.12.3
+ARG VERSION=0.12.4
 ARG VCS_REF=unknown
 LABEL org.opencontainers.image.title="CtS OCR backend" \
+    org.opencontainers.image.licenses="MIT" \
     org.opencontainers.image.description="Self-hosted English and Japanese character recognition for Circle to Search, using FP32 Vulkan inference" \
     org.opencontainers.image.source="https://github.com/szynszyling/CtS" \
     org.opencontainers.image.documentation="https://github.com/szynszyling/CtS/blob/main/server/README.md" \

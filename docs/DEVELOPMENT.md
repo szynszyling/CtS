@@ -80,7 +80,7 @@ Platform installers/build definitions belong in `packaging/<os>/`. The [Windows]
 
 ## Releases and generated files
 
-The desktop and server have independent versions. Desktop ports share the desktop version, with platform-specific release artifacts when those ports exist. Backend releases use matching `ocr-vX.Y.Z` Git tags and publish a private GHCR image after tests pass.
+The desktop and server have independent versions. Desktop ports share the desktop version, with platform-specific release artifacts when those ports exist. Backend releases use matching `ocr-vX.Y.Z` Git tags and publish a public GHCR image after tests pass.
 
 Generated `build/`, `dist/`, `*.egg-info`, Python/Ruff caches, credentials and downloaded model weights are ignored. Keep model manifests and licenses in Git. Keep browser sessions and user settings out of source/build contexts. Installer updates prune obsolete managed Python modules and icons while preserving user data.
 

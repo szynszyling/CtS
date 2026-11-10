@@ -61,9 +61,13 @@ class ManagedBackendTests(unittest.TestCase):
             "pyproject.toml",
             "requirements.lock",
             "README.md",
+            "LICENSE",
             "THIRD_PARTY.md",
         ):
             (source / name).write_text("source")
+        (source / "licenses").mkdir()
+        (source / "licenses/Apache-2.0.txt").write_text("model license")
+        (source / "licenses/.env").write_text("unrelated private settings")
         (source / ".env").write_text("private token")
         for directory in ("cts_ocr_server", "tests"):
             (source / directory).mkdir()
@@ -83,6 +87,8 @@ class ManagedBackendTests(unittest.TestCase):
         ):
             managed_ocr.build_image()
         self.assertIn("server/cts_ocr_server/example.py", observed)
+        self.assertIn("server/LICENSE", observed)
+        self.assertIn("server/licenses/Apache-2.0.txt", observed)
         self.assertFalse(any(".env" in name or ".png" in name for name in observed))
 
     def test_local_modes_do_not_require_a_valid_unused_remote_address(self):

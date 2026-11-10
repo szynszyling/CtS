@@ -1,4 +1,4 @@
-"""Publish a tested container without changing its private package visibility."""
+"""Publish a tested container after verifying its owner and selected visibility."""
 
 import argparse
 import json
@@ -35,12 +35,14 @@ def package_info(image, token):
         ) from error
 
 
-def require_private(info, repository):
+def require_visibility(info, repository, visibility):
     if info is None:
-        return  # GitHub creates new container packages as private.
-    if info.get("visibility") != "private":
+        if visibility == "private":
+            return  # GitHub creates new container packages as private.
+        raise RuntimeError("The public package must exist and be accessible before publishing.")
+    if info.get("visibility") != visibility:
         raise RuntimeError(
-            "Refusing to publish to a non-private package. Package visibility must stay private."
+            f"Expected a {visibility} package. Change its visibility in GitHub package settings first."
         )
     linked = (info.get("repository") or {}).get("full_name")
     if linked and linked.lower() != repository.lower():
@@ -52,6 +54,7 @@ def main(argv=None):
     parser.add_argument("--image", required=True)
     parser.add_argument("--version", required=True)
     parser.add_argument("--source", default="cts-ocr:ci")
+    parser.add_argument("--visibility", choices=("public", "private"), default="public")
     args = parser.parse_args(argv)
     if not re.fullmatch(r"ghcr\.io/[a-z0-9-]+/[a-z0-9._-]+", args.image):
         parser.error("Invalid image name.")
@@ -61,7 +64,7 @@ def main(argv=None):
     repository = os.environ["GITHUB_REPOSITORY"]
     revision = os.environ["GITHUB_SHA"]
     actor = os.environ["GITHUB_ACTOR"]
-    require_private(package_info(args.image, token), repository)
+    require_visibility(package_info(args.image, token), repository, args.visibility)
     # The exact image that passed tests is tagged, rather than being rebuilt.
     subprocess.run(
         ["docker", "login", "ghcr.io", "--username", actor, "--password-stdin"],
@@ -83,18 +86,18 @@ def main(argv=None):
             raise RuntimeError(
                 "Published package metadata is not available yet; latest was not updated."
             )
-        require_private(info, repository)
+        require_visibility(info, repository, args.visibility)
         for tag in tags[1:]:
             subprocess.run(["docker", "push", args.image + ":" + tag], check=True)
         subprocess.run(["docker", "pull", args.image + ":" + args.version], check=True)
     finally:
         subprocess.run(["docker", "logout", "ghcr.io"], check=False)
-    print("Published private image:", args.image + ":" + args.version, flush=True)
+    print(f"Published {args.visibility} image:", args.image + ":" + args.version, flush=True)
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a") as output:
             output.write(
-                f"Published private `{args.image}:{args.version}`, `sha-{revision}` and `latest`.\n"
+                f"Published {args.visibility} `{args.image}:{args.version}`, `sha-{revision}` and `latest`.\n"
             )
     return 0
 

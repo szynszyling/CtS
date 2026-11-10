@@ -1,6 +1,11 @@
 # Third-party sources
 
+CtS's original server code is covered by the [MIT license](LICENSE). The
+third-party components below retain their upstream terms.
+
 The PP-OCRv5 ncnn models and dictionary are fetched from [nihui/ncnn-android-ppocrv5](https://github.com/nihui/ncnn-android-ppocrv5), pinned at revision `458269b48a434a4301070f83f7ce90e8fd11180f`. Individual URLs and SHA-256 values are recorded in `cts_ocr_server/models.json`. The models originate in [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR); its project uses Apache-2.0. Downloaded artifacts retain their upstream terms.
+
+A copy of the [Apache 2.0 license](licenses/Apache-2.0.txt) accompanies the models.
 
 The detector preprocessing and postprocessing were adapted from Tencent's [ncnn PP-OCRv5 example](https://github.com/Tencent/ncnn/blob/master/examples/ppocrv5.cpp), copyright 2025 Tencent, SPDX BSD-3-Clause. The ncnn dictionary header retains its upstream license notice. Character decoding/coordinate conversion and the HTTP/client integration are implemented for CtS.
 

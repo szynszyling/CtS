@@ -67,6 +67,8 @@ def install(prefix=None, shortcut="Meta+Shift+G"):
         binary = Path.home() / ".local/bin"
     target = data / "circle-to-search"
     target.mkdir(parents=True, exist_ok=True)
+    for name in ("LICENSE", "THIRD_PARTY.md"):
+        shutil.copyfile(SOURCE / name, target / name)
     # Installed package code and icons are managed files. Remove modules
     # deleted or moved in the source tree instead of accumulating old versions.
     # User settings, WebEngine data, downloaded models and server .env files

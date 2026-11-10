@@ -32,11 +32,11 @@ Production users copy only the root `compose.yaml`. The `server/compose*.yaml` f
 ```sh
 docker build --target test -f server/Dockerfile -t circle-to-search-ocr:test .
 docker compose --env-file server/.env -f server/compose.yaml -f server/compose.build.yaml build
-python3 tools/smoke/ocr_server.py --docker circle-to-search-ocr:0.12.3 --gpu-name AMD
-python3 tools/smoke/ocr_server.py --docker circle-to-search-ocr:0.12.3 --device cpu
-python3 tools/smoke/ocr_server.py --docker circle-to-search-ocr:0.12.3 --gpu-name AMD --detector-scale 1.5
-python3 tools/smoke/ocr_https.py --image circle-to-search-ocr:0.12.3
-python3 tools/smoke/compose.py --image circle-to-search-ocr:0.12.3
+python3 tools/smoke/ocr_server.py --docker circle-to-search-ocr:0.12.4 --gpu-name AMD
+python3 tools/smoke/ocr_server.py --docker circle-to-search-ocr:0.12.4 --device cpu
+python3 tools/smoke/ocr_server.py --docker circle-to-search-ocr:0.12.4 --gpu-name AMD --detector-scale 1.5
+python3 tools/smoke/ocr_https.py --image circle-to-search-ocr:0.12.4
+python3 tools/smoke/compose.py --image circle-to-search-ocr:0.12.4
 ```
 
 The tests use generated text, including 14px light/dark Japanese and vertical character selection. The HTTPS check uses an isolated Docker network, the exact SWAG virtual host, a temporary trusted test certificate and a CPU reference backend. It checks bearer forwarding, rejection of an invalid token, upload limits and rejection of an untrusted TLS certificate. It does not change a working SWAG container or desktop configuration.
@@ -47,10 +47,10 @@ The FP32 Radeon 610M container measured roughly 65–90 ms across the small synt
 
 Measure the actual device, fonts, image sizes and transport before changing defaults. Do not present a CPU path as GPU acceleration or assume a GPU is faster for every small request.
 
-## Publish a private release
+## Publish a public release
 
-Update the server version in `pyproject.toml`, `cts_ocr_server/__init__.py`, Docker/image defaults and documentation, then commit and push. Create a matching tag such as `ocr-v0.12.3`.
+Update the server version in `pyproject.toml`, `cts_ocr_server/__init__.py`, Docker/image defaults and documentation, then commit and push. Create a matching tag such as `ocr-v0.12.4`.
 
 The release workflow gates publishing on desktop/backend tests, model self-tests and real HTTPS/OCR integration. It tags the exact tested image and publishes version, source-commit and `latest` tags to GHCR using the repository’s temporary `GITHUB_TOKEN`, then pulls it back. OCI labels identify its source, version and revision.
 
-The publishing helper refuses an existing non-private package or a package associated with another repository. New packages default to private, and visibility is checked again before publishing `latest`. It never changes visibility. Normal main/PR builds only test. Use a digest for an immutable deployment reference.
+The release workflow requires the existing package to be public. Set its visibility in GitHub's package settings before tagging the release; the helper verifies visibility and the linked repository before publishing and checks again before updating `latest`. It never changes visibility. For a separate private deployment, the helper supports `--visibility private`. Normal main/PR builds only test. Use a digest for an immutable deployment reference.

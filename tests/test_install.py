@@ -33,6 +33,12 @@ class InstallTests(unittest.TestCase):
             self.assertIn("Circle, highlight", result.stdout)
             backend = Path(directory) / "share/circle-to-search/server"
             self.assertTrue((backend / "Dockerfile").is_file())
+            self.assertEqual(
+                (target / "LICENSE").read_text(), (install.SOURCE / "LICENSE").read_text()
+            )
+            self.assertTrue((target / "THIRD_PARTY.md").is_file())
+            self.assertTrue((backend / "LICENSE").is_file())
+            self.assertTrue((backend / "licenses/Apache-2.0.txt").is_file())
             self.assertTrue((backend / "cts_ocr_server/models.json").is_file())
             self.assertEqual((backend / ".env").read_text(), "private user settings")
             self.assertFalse((old_package / "desktop.py").exists())

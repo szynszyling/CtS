@@ -15,7 +15,7 @@ from pathlib import Path
 
 from ...ocr_backend import check_server, settings_path
 
-IMAGE = "circle-to-search-ocr:0.12.3"
+IMAGE = "circle-to-search-ocr:0.12.4"
 NAME = "circle-to-search-ocr"
 _LOCK = threading.Lock()
 _CONNECTION = None
@@ -66,9 +66,13 @@ def build_image():
             "pyproject.toml",
             "requirements.lock",
             "README.md",
+            "LICENSE",
             "THIRD_PARTY.md",
         ):
             shutil.copyfile(source / name, destination / name)
+        (destination / "licenses").mkdir()
+        for path in (source / "licenses").glob("*.txt"):
+            shutil.copyfile(path, destination / "licenses" / path.name)
         for name in ("cts_ocr_server", "tests"):
             target = destination / name
             target.mkdir()

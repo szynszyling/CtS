@@ -42,6 +42,10 @@ Press **Meta + Shift + G**, draw around something on your screen, and see Google
 
 This project brings a Circle to Search-style interaction to the desktop. It is an independent project, not an official Google application. Some Android-only features are not available.
 
+## Maintenance 🛠️
+
+CtS is a personal project maintained in my spare time. Updates, support and response times are not guaranteed. Contributions and forks are welcome, but reviews may take time.
+
 ## Get started 🚀
 
 ### 1. Install
@@ -89,7 +93,7 @@ Open **⋮ → Text recognition** and choose:
 | **Local GPU (managed by CtS)** | Your computer’s GPU | Docker and a working supported GPU |
 | **Self-hosted CtS server** | Your own server or NAS | Its address and OCR token |
 
-For the server, save just **[compose.yaml](compose.yaml)** in a folder on your NAS, fill in its OCR token and render-group number, and run `docker compose up -d`. CtS joins the existing external Docker network **`server`**, shared with SWAG. Docker pulls the **private** image `ghcr.io/szynszyling/cts-ocr:latest`. You do not need a repository clone, `.env` file or source files on the NAS. See the [single-file setup guide](server/README.md) and [SWAG configuration](server/REMOTE_ACCESS.md).
+For the server, save just **[compose.yaml](compose.yaml)** in a folder on your NAS, fill in its OCR token and render-group number, and run `docker compose up -d`. CtS joins the existing external Docker network **`server`**, shared with SWAG. Docker pulls `ghcr.io/szynszyling/cts-ocr:latest` from the public registry without a login. You do not need a repository clone, `.env` file or source files on the NAS. See the [single-file setup guide](server/README.md) and [SWAG configuration](server/REMOTE_ACCESS.md).
 
 ## A few useful things to know 💡
 
@@ -100,3 +104,7 @@ For the server, save just **[compose.yaml](compose.yaml)** in a folder on your N
 - Text-recognition accuracy and speed depend on your hardware, text size and font. A GPU is not always faster than a CPU.
 
 Need help? Start with [installation and troubleshooting](docs/INSTALL.md). Technical details, command-line options and instructions for adding another OS are in the [developer guide](docs/DEVELOPMENT.md).
+
+## License 📄
+
+CtS's original code is available under the [MIT license](LICENSE). Third-party code, OCR models, dependencies and Google artwork retain their own terms; see [third-party notices](THIRD_PARTY.md).
