@@ -224,12 +224,21 @@ class OcrModelsDialog(QDialog):
         selected = set(selected_models())
         for model in model_manifest()["models"]:
             code = model["name"]
-            item = QListWidgetItem(f"{model['label']} · {model['bytes'] / 1e6:.1f} MB")
+            label = model["label"]
+            if not uses_backend:
+                label += f" · {model['bytes'] / 1e6:.1f} MB"
+            item = QListWidgetItem(label)
             item.setData(Qt.UserRole, code)
             item.setCheckState(Qt.Checked if code in selected else Qt.Unchecked)
             self.backend.addItem(item)
         layout.addWidget(self.backend)
-        self.status = QLabel(tr("The OCR backend supplies these models.") if uses_backend else "")
+        self.status = QLabel(
+            tr("CtS prepares only the GPU recognizers needed for the selected languages.")
+            if self.config.backend == "gpu"
+            else tr("The OCR backend supplies these models.")
+            if uses_backend
+            else ""
+        )
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
         buttons = QDialogButtonBox(QDialogButtonBox.Cancel)

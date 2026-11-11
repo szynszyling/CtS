@@ -10,6 +10,7 @@ POLISH = {
     "Select at least one OCR language.": "Wybierz co najmniej jeden język rozpoznawania.",
     "Choose the languages to use with the current OCR backend.": "Wybierz języki dla bieżącej metody rozpoznawania tekstu.",
     "The OCR backend supplies these models.": "Modele zapewnia bieżąca metoda rozpoznawania tekstu.",
+    "CtS prepares only the GPU recognizers needed for the selected languages.": "CtS przygotuje tylko modele GPU potrzebne dla wybranych języków.",
     "Checking server connection…": "Sprawdzanie połączenia z serwerem…",
     "Unavailable with this OCR backend:": "Niedostępne dla bieżącej metody rozpoznawania tekstu:",
     "Preparing selected OCR models…": "Przygotowywanie wybranych modeli OCR…",
