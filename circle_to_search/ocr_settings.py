@@ -1,7 +1,5 @@
 """Native connection settings for local and self-hosted text recognition."""
 
-from dataclasses import replace
-
 from PySide6.QtCore import Qt, QThreadPool, QTimer, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -209,13 +207,13 @@ class OcrModelsDialog(QDialog):
         self.cancelled = False
         self.setWindowTitle(tr("OCR languages"))
         self.config = current_config()
-        remote = self.config.backend == "server"
+        uses_backend = self.config.backend != "local"
         self.setStyleSheet("QDialog {background:" + current_theme().background + ";}")
         layout = QVBoxLayout(self)
         description = QLabel(
             tr(
-                "Choose the languages to use on your OCR server."
-                if remote
+                "Choose the languages to use with the current OCR backend."
+                if uses_backend
                 else "Choose the languages to recognize with local Tesseract. Only missing selected models are downloaded."
             )
         )
@@ -231,17 +229,13 @@ class OcrModelsDialog(QDialog):
             item.setCheckState(Qt.Checked if code in selected else Qt.Unchecked)
             self.backend.addItem(item)
         layout.addWidget(self.backend)
-        self.status = QLabel(
-            tr("The server supplies these models.")
-            if remote
-            else tr("Selecting models switches OCR to local Tesseract (CPU).")
-        )
+        self.status = QLabel(tr("The OCR backend supplies these models.") if uses_backend else "")
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
         buttons = QDialogButtonBox(QDialogButtonBox.Cancel)
         buttons.button(QDialogButtonBox.Cancel).setText(tr("Cancel"))
         self.apply = buttons.addButton(
-            tr("Save") if remote else tr("Download and use"), QDialogButtonBox.AcceptRole
+            tr("Save") if uses_backend else tr("Download and use"), QDialogButtonBox.AcceptRole
         )
         buttons.accepted.connect(self.download)
         buttons.rejected.connect(self.reject)
@@ -262,7 +256,10 @@ class OcrModelsDialog(QDialog):
             return
         self.apply.setEnabled(False)
         self.backend.setEnabled(False)
-        if self.config.backend == "server":
+        if self.config.backend == "gpu":
+            self.status.setText(tr("Preparing local text recognition…"))
+            self.task = Task(get_backend().prepare_local_ocr, self.config)
+        elif self.config.backend == "server":
             self.status.setText(tr("Checking server connection…"))
             self.task = Task(check_server, self.config)
         else:
@@ -276,19 +273,15 @@ class OcrModelsDialog(QDialog):
         if self.cancelled:
             return
         try:
-            if self.config.backend == "server":
+            if self.config.backend != "local":
                 available = set(result.get("languages", []))
                 if "jpn" in available:
                     available.add("jpn_vert")
                 missing = set(self.codes) - available
                 if missing:
                     raise ValueError(
-                        tr("Unavailable on this server:") + " " + ", ".join(sorted(missing))
+                        tr("Unavailable with this OCR backend:") + " " + ", ".join(sorted(missing))
                     )
-            else:
-                config = replace(self.config, backend="local")
-                config.save()
-                configure_ocr(config)
             set_selected_models(self.codes)
         except (OSError, ValueError) as error:
             self.download_failed(str(error))

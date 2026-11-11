@@ -91,7 +91,9 @@ class ManagedBackendTests(unittest.TestCase):
         self.assertIn("server/cts_ocr_server/example.py", observed)
         self.assertIn("server/LICENSE", observed)
         self.assertIn("server/licenses/Apache-2.0.txt", observed)
-        self.assertFalse(any(".env" in name or ".png" in name for name in observed))
+        self.assertIn("circle_to_search/models.py", observed)
+        self.assertIn("circle_to_search/tessdata/models.json", observed)
+        self.assertFalse(any(name.endswith((".env", ".png", ".traineddata")) for name in observed))
 
     def test_local_modes_do_not_require_a_valid_unused_remote_address(self):
         self.assertEqual(OcrConfig("gpu", server_url="unfinished").validated().backend, "gpu")

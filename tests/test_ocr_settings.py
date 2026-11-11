@@ -68,23 +68,27 @@ class SettingsTests(unittest.TestCase):
             save.assert_not_called()
         self.assertEqual(current_config().backend, "local")
 
-    def test_selecting_a_server_language_preserves_backend_without_downloading(self):
-        config = OcrConfig(backend="server")
-        configure_ocr(config)
-        picker = OcrModelsDialog()
-        for i in range(picker.backend.count()):
-            item = picker.backend.item(i)
-            item.setCheckState(Qt.Checked if item.data(Qt.UserRole) == "pol" else Qt.Unchecked)
-        with (
-            patch("circle_to_search.ocr_settings.QThreadPool") as pool,
-            patch("circle_to_search.ocr_settings.set_selected_models") as save,
-        ):
-            picker.download()
-            task = pool.globalInstance.return_value.start.call_args.args[0]
-            task.signals.done.emit({"languages": ["pol"]})
-            APP.processEvents()
-            save.assert_called_once_with(("pol",))
-        self.assertEqual(current_config(), config)
+    def test_selecting_languages_preserves_server_and_gpu_backends(self):
+        for backend in ("server", "gpu"):
+            with self.subTest(backend=backend):
+                config = OcrConfig(backend=backend)
+                configure_ocr(config)
+                picker = OcrModelsDialog()
+                for i in range(picker.backend.count()):
+                    item = picker.backend.item(i)
+                    item.setCheckState(
+                        Qt.Checked if item.data(Qt.UserRole) == "pol" else Qt.Unchecked
+                    )
+                with (
+                    patch("circle_to_search.ocr_settings.QThreadPool") as pool,
+                    patch("circle_to_search.ocr_settings.set_selected_models") as save,
+                ):
+                    picker.download()
+                    task = pool.globalInstance.return_value.start.call_args.args[0]
+                    task.signals.done.emit({"languages": ["pol"]})
+                    APP.processEvents()
+                    save.assert_called_once_with(("pol",))
+                self.assertEqual(current_config(), config)
 
 
 if __name__ == "__main__":

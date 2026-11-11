@@ -13,9 +13,10 @@ import time
 from dataclasses import replace
 from pathlib import Path
 
+from ...models import MODEL_DIR
 from ...ocr_backend import check_server, settings_path
 
-IMAGE = "circle-to-search-ocr:0.12.4"
+IMAGE = "circle-to-search-ocr:0.13.0"
 NAME = "circle-to-search-ocr"
 _LOCK = threading.Lock()
 _CONNECTION = None
@@ -59,8 +60,7 @@ def build_image():
     with tempfile.TemporaryDirectory(prefix="cts-local-ocr-build-") as directory:
         destination = Path(directory) / "server"
         destination.mkdir()
-        # A build context contains backend source only, never user .env files,
-        # desktop captures, cached models, or the rest of the desktop app.
+        # Include only backend source and the pinned language download inputs.
         for name in (
             "Dockerfile",
             "pyproject.toml",
@@ -79,6 +79,11 @@ def build_image():
             for path in (source / name).iterdir():
                 if path.is_file() and path.suffix in (".py", ".json"):
                     shutil.copyfile(path, target / path.name)
+        models = Path(directory) / "circle_to_search"
+        (models / "tessdata").mkdir(parents=True)
+        for name in ("__init__.py", "models.py"):
+            shutil.copyfile(MODEL_DIR.parent / name, models / name)
+        shutil.copyfile(MODEL_DIR / "models.json", models / "tessdata/models.json")
         command(
             ["docker", "build", "-f", str(destination / "Dockerfile"), "-t", IMAGE, directory],
             timeout=600,
