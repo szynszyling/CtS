@@ -134,7 +134,7 @@ def main():
         controller.current = screen
         controller.captured(Capture(QImage(), QRectF(screen.geometry()), {origin: frame}))
         overlay = controller.overlays[0]
-        wait_until(lambda: not overlay.ocr_pending, "local recognition")
+        wait_until(lambda: not overlay.ocr_pending, "local recognition", timeout=45)
         assert overlay.geometry() == screen.geometry(), (overlay.geometry(), screen.geometry())
         text = overlay.document.text()
         assert JAPANESE in text, repr(text)
