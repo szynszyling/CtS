@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 )
 
 from .appearance import current_theme
+from .languages import tr
 from .motion import fade, move
 
 
@@ -85,7 +86,7 @@ class TextActions(QFrame):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(7, 2, 7, 2)
         layout.setSpacing(0)
-        self.copy_button = QPushButton("Copy")
+        self.copy_button = QPushButton(tr("Copy"))
         self.copy_button.clicked.connect(self.copyRequested.emit)
         layout.addWidget(self.copy_button)
         self.divider = QFrame()
@@ -93,7 +94,7 @@ class TextActions(QFrame):
         self.divider.setFixedSize(1, 20)
         self.divider.setAttribute(Qt.WA_TransparentForMouseEvents)
         layout.addWidget(self.divider, alignment=Qt.AlignVCenter)
-        self.translate_button = QPushButton("Translate")
+        self.translate_button = QPushButton(tr("Translate"))
         self.translate_button.clicked.connect(self.translateRequested.emit)
         layout.addWidget(self.translate_button)
         self.hide()
@@ -229,7 +230,7 @@ class DragControl(QObject):
         for target in targets:
             target.installEventFilter(self)
             target.setCursor(Qt.OpenHandCursor)
-            target.setToolTip("Drag to move the search bar; in results, drag up/down to resize")
+            target.setToolTip(tr("Drag to move the search bar; in results, drag up/down to resize"))
 
     def update_drag(self, position):
         delta = position - self.origin
@@ -292,17 +293,17 @@ class SearchPill(QFrame):
         self.thumbnail.hide()
         layout.addWidget(self.thumbnail)
         self.query = QLineEdit()
-        self.query.setPlaceholderText("Search")
-        self.query.setAccessibleName("Search or add to your image search")
+        self.query.setPlaceholderText(tr("Search"))
+        self.query.setAccessibleName(tr("Search or add to your image search"))
         self.query.returnPressed.connect(self.submit)
         layout.addWidget(self.query, 1)
-        self.go = IconButton("search", "Search")
+        self.go = IconButton("search", tr("Search"))
         self.go.clicked.connect(self.submit)
         layout.addWidget(self.go)
-        self.translate = IconButton("translate", "Translate selected text")
+        self.translate = IconButton("translate", tr("Translate selected text"))
         self.translate.clicked.connect(self.translateRequested.emit)
         layout.addWidget(self.translate)
-        self.lens = IconButton("lens", "Search selected image")
+        self.lens = IconButton("lens", tr("Search selected image"))
         self.lens.clicked.connect(self.imageRequested.emit)
         layout.addWidget(self.lens)
 
@@ -318,7 +319,7 @@ class SearchPill(QFrame):
     def set_selection(self, image=None, text=""):
         self.query.setText(text)
         self.query.setPlaceholderText(
-            "Add to your search" if image is not None and not text else "Search"
+            tr("Add to your search") if image is not None and not text else tr("Search")
         )
         self.thumbnail.setVisible(image is not None and not text)
         if image is not None:
@@ -355,6 +356,7 @@ class SearchTabs(QFrame):
         self.group = QButtonGroup(self)
         self.buttons = {}
         for key, text in self.LABELS:
+            text = tr(text)
             control = QToolButton()
             control.setText(text)
             control.setCheckable(True)
@@ -365,11 +367,11 @@ class SearchTabs(QFrame):
             control.clicked.connect(lambda checked, tab=key: self.requested.emit(tab))
             layout.addWidget(control)
         self.more = QToolButton()
-        self.more.setText("More ▾")
+        self.more.setText(tr("More ▾"))
         self.more.setCheckable(True)
         self.group.addButton(self.more)
         menu = QMenu(self.more)
-        for key, text in [("web", "Web"), ("books", "Books")]:
+        for key, text in [("web", tr("Web")), ("books", tr("Books"))]:
             menu.addAction(text, lambda tab=key: self.requested.emit(tab))
         self.more.setMenu(menu)
         menu.aboutToHide.connect(lambda: self.set_active(self.active_key))
@@ -377,15 +379,15 @@ class SearchTabs(QFrame):
         layout.addWidget(self.more)
         layout.addStretch(1)
         self.tools = QToolButton()
-        self.tools.setText("Tools")
+        self.tools.setText(tr("Tools"))
         filters = QMenu(self.tools)
         for value, text in [
-            ("", "Any time"),
-            ("h", "Past hour"),
-            ("d", "Past day"),
-            ("w", "Past week"),
-            ("m", "Past month"),
-            ("y", "Past year"),
+            ("", tr("Any time")),
+            ("h", tr("Past hour")),
+            ("d", tr("Past day")),
+            ("w", tr("Past week")),
+            ("m", tr("Past month")),
+            ("y", tr("Past year")),
         ]:
             filters.addAction(text, lambda period=value: self.filterRequested.emit(period))
         self.tools.setMenu(filters)
@@ -451,9 +453,9 @@ class SheetHandle(QWidget):
         self.setFixedHeight(27)
         self.setCursor(Qt.CursorShape.SizeAllCursor)
         self.setAccessibleName(
-            "Drag to move and resize results together; click to expand or collapse"
+            tr("Drag to move and resize results together; click to expand or collapse")
         )
-        self.setToolTip("Drag diagonally to move and resize results together")
+        self.setToolTip(tr("Drag diagonally to move and resize results together"))
         self.origin = None
 
     def paintEvent(self, event):

@@ -7,6 +7,8 @@ import subprocess
 import venv
 from pathlib import Path
 
+from ...models import DEFAULT_MODELS, model_manifest
+
 SOURCE = Path(__file__).resolve().parents[3]
 MARKER = "circle-to-search-windows-source-v1\n"
 SHORTCUT_SCRIPT = r"""
@@ -61,7 +63,7 @@ def installation_root(prefix=None):
     return target
 
 
-def install(prefix=None, startup=False):
+def install(prefix=None, startup=False, models=DEFAULT_MODELS):
     from tools.fetch_models import fetch_models
 
     target = installation_root(prefix)
@@ -99,13 +101,17 @@ def install(prefix=None, startup=False):
     shutil.copyfile(SOURCE / "server/THIRD_PARTY.md", target / "server/THIRD_PARTY.md")
     shutil.copyfile(SOURCE / "server/LICENSE", target / "server/LICENSE")
     shutil.copytree(SOURCE / "server/licenses", target / "server/licenses", dirs_exist_ok=True)
-    fetch_models(target / "circle_to_search/tessdata")
+    fetch_models(target / "circle_to_search/tessdata", models)
     launcher = target / "launch.pyw"
     launcher.write_text(
         "import sys\nfrom circle_to_search.app import main\nraise SystemExit(main(['--resident', *sys.argv[1:]]))\n",
         encoding="utf-8",
     )
     if not prefix:
+        if models != DEFAULT_MODELS:
+            from ...languages import set_selected_models
+
+            set_selected_models(models)
         shortcuts(python.with_name("pythonw.exe"), [str(launcher), "--resident"], startup=startup)
     print("Installed Circle to Search:", launcher)
     return launcher
@@ -135,11 +141,19 @@ def main(argv=None):
     parser.add_argument(
         "--uninstall", action="store_true", help="Remove the managed application and shortcuts"
     )
+    parser.add_argument(
+        "--models",
+        nargs="+",
+        choices=[item["name"] for item in model_manifest()["models"]],
+        help="OCR models to install, for example --models eng pol ukr",
+    )
     args = parser.parse_args(argv)
     try:
         if args.uninstall:
             uninstall(args.prefix)
         else:
-            install(args.prefix, args.startup)
+            install(
+                args.prefix, args.startup, tuple(args.models) if args.models else DEFAULT_MODELS
+            )
     except (OSError, RuntimeError, subprocess.SubprocessError) as error:
         parser.error(str(error))

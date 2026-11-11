@@ -9,7 +9,8 @@ from PySide6.QtGui import QCursor, QDesktopServices, QIcon, QImage
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from .geometry import pixel_bounds
-from .ocr import default_languages, find_tesseract
+from .languages import tr
+from .ocr import find_tesseract
 from .platforms import get_backend
 from .platforms.base import Capture, UnsupportedPlatform
 from .results import close_browser_profile
@@ -76,7 +77,7 @@ class Controller(QObject):
                 auto_search=self.args.auto_search,
                 external=self.args.external,
             )
-            overlay.vertical = self.args.vertical
+            overlay.vertical = self.args.vertical or overlay.language == "jpn_vert"
             overlay.selected.connect(self.selected)
             overlay.cancelled.connect(self.quit)
             overlay.externalRequested.connect(self.open_external)
@@ -99,9 +100,14 @@ class Controller(QObject):
         active.activateWindow()
 
     def update_ocr(self):
+        active = self.sender()
         for overlay in self.overlays:
+            if isinstance(active, SelectionOverlay):
+                overlay.language = active.language
+                if overlay.language == "jpn_vert":
+                    overlay.vertical = True
             overlay.clear_selection()
-            overlay.hint.setText("Circle, highlight, scribble or tap to search")
+            overlay.hint.setText(tr("Circle, highlight, scribble or tap to search"))
             overlay.hint.adjustSize()
             overlay.start_recognition()
 
@@ -165,7 +171,7 @@ def main(argv=None):
     parser.add_argument("--mode", choices=("circle", "box"), default="circle")
     parser.add_argument(
         "--ocr-language",
-        default=os.environ.get("CTS_OCR_LANGUAGE", default_languages()),
+        default=os.environ.get("CTS_OCR_LANGUAGE"),
         help="Tesseract languages (default: Japanese and English with bundled models)",
     )
     parser.add_argument("--vertical", action="store_true", help="Recognize vertical Japanese text")

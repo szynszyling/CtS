@@ -9,6 +9,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from ....models import DEFAULT_MODELS, model_manifest
+
 DESKTOP_ID = "io.github.circle_to_search.desktop"
 SOURCE = Path(__file__).resolve().parents[4]
 
@@ -55,7 +57,7 @@ def register_shortcut(shortcut):
         )
 
 
-def install(prefix=None, shortcut="Meta+Shift+G"):
+def install(prefix=None, shortcut="Meta+Shift+G", models=DEFAULT_MODELS):
     from PySide6.QtCore import __version__ as qt_version
 
     print(f"Using Python {sys.version.split()[0]} and PySide6 {qt_version}")
@@ -99,7 +101,7 @@ def install(prefix=None, shortcut="Meta+Shift+G"):
     )
     from tools.fetch_models import fetch_models
 
-    fetch_models(target / "circle_to_search/tessdata")
+    fetch_models(target / "circle_to_search/tessdata", models)
     binary.mkdir(parents=True, exist_ok=True)
     launcher = binary / "circle-to-search"
     launcher.write_text(
@@ -125,6 +127,10 @@ def install(prefix=None, shortcut="Meta+Shift+G"):
     print(f"Installed launcher: {launcher}")
     print(f"Installed desktop entry: {desktop}")
     if not prefix:
+        if models != DEFAULT_MODELS:
+            from ....languages import set_selected_models
+
+            set_selected_models(models)
         builder = shutil.which("kbuildsycoca6")
         if builder:
             subprocess.run([builder, "--noincremental"], check=False, timeout=30)
@@ -142,8 +148,14 @@ def main():
         default="Meta+Shift+G",
         help="Default global shortcut (existing bindings are preserved)",
     )
+    parser.add_argument(
+        "--models",
+        nargs="+",
+        choices=[item["name"] for item in model_manifest()["models"]],
+        help="OCR models to install, for example --models eng pol ukr",
+    )
     args = parser.parse_args()
-    install(args.prefix, args.shortcut)
+    install(args.prefix, args.shortcut, tuple(args.models) if args.models else DEFAULT_MODELS)
 
 
 if __name__ == "__main__":

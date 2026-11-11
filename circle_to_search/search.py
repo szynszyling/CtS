@@ -5,6 +5,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from .languages import display_language
+
 LENS_UPLOAD_URL = "https://lens.google.com/v3/upload"
 
 SEARCH_MODES = {
@@ -91,7 +93,7 @@ def normalize_search_url(url: str) -> str:
     # the app's browser theme rather than a special Google rendering mode.
     for key in ("cs", "gl", "gsc", "lr"):
         params.pop(key, None)
-    params["hl"] = "en"
+    params["hl"] = display_language()
     return urllib.parse.urlunsplit(parts._replace(query=urllib.parse.urlencode(params)))
 
 
@@ -157,7 +159,7 @@ def upload_to_lens(png: bytes, query: str = "") -> str:
     """
     body, content_type = lens_upload_data(png)
     request = urllib.request.Request(
-        LENS_UPLOAD_URL + "?ep=ccm&s=csp",
+        LENS_UPLOAD_URL + "?ep=ccm&s=csp&hl=" + display_language(),
         data=body,
         headers={
             "Content-Type": content_type,
@@ -208,7 +210,8 @@ def text_search_url(text: str) -> str:
     )
 
 
-def translation_url(text: str, target: str = "en") -> str:
+def translation_url(text: str, target: str | None = None) -> str:
+    language = display_language()
     return "https://translate.google.com/?" + urllib.parse.urlencode(
-        {"sl": "auto", "tl": target, "hl": "en", "text": text, "op": "translate"}
+        {"sl": "auto", "tl": target or language, "hl": language, "text": text, "op": "translate"}
     )

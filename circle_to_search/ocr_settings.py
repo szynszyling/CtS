@@ -1,5 +1,7 @@
 """Native connection settings for local and self-hosted text recognition."""
 
+from dataclasses import replace
+
 from PySide6.QtCore import Qt, QThreadPool, QTimer, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -11,6 +13,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QPushButton,
     QScrollArea,
     QSpinBox,
@@ -19,7 +23,10 @@ from PySide6.QtWidgets import (
 )
 
 from .appearance import current_theme
+from .languages import selected_models, set_selected_models, tr
+from .models import fetch_models, model_manifest
 from .ocr_backend import OcrConfig, check_server, configure_ocr, current_config
+from .paths import ocr_model_directory
 from .platforms import get_backend
 from .workers import Task
 
@@ -27,7 +34,7 @@ from .workers import Task
 class OcrSettingsDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Text recognition")
+        self.setWindowTitle(tr("Text recognition"))
         self.setMinimumWidth(540)
         self.setStyleSheet("QDialog {background:" + current_theme().background + ";}")
         self.config = current_config()
@@ -35,44 +42,48 @@ class OcrSettingsDialog(QDialog):
         self.checking = False
         layout = QVBoxLayout(self)
         description = QLabel(
-            "Choose where CtS recognizes text. Local GPU mode manages a CtS backend on this computer; server mode connects to your own CtS backend on another device."
+            tr(
+                "Choose where CtS recognizes text. Local GPU mode manages a CtS backend on this computer; server mode connects to your own CtS backend on another device."
+            )
         )
         description.setWordWrap(True)
         layout.addWidget(description)
         form = QFormLayout()
         self.backend = QComboBox()
-        self.backend.addItem("Local GPU (managed by CtS)", "gpu")
-        self.backend.addItem("Self-hosted CtS server", "server")
-        self.backend.addItem("Local Tesseract (CPU)", "local")
+        self.backend.addItem(tr("Local GPU (managed by CtS)"), "gpu")
+        self.backend.addItem(tr("Self-hosted CtS server"), "server")
+        self.backend.addItem(tr("Local Tesseract (CPU)"), "local")
         self.backend.setCurrentIndex(self.backend.findData(self.config.backend))
-        form.addRow("Backend", self.backend)
+        form.addRow(tr("Backend"), self.backend)
         self.gpu = QLineEdit(self.config.local_gpu_name)
-        self.gpu.setPlaceholderText("Automatic, or a name such as AMD / Intel")
-        form.addRow("Local GPU", self.gpu)
+        self.gpu.setPlaceholderText(tr("Automatic, or a name such as AMD / Intel"))
+        form.addRow(tr("Local GPU"), self.gpu)
         self.url = QLineEdit(self.config.server_url)
         self.url.setPlaceholderText("https://cts.your-domain.com")
         self.url.setToolTip(
-            "Use your HTTPS domain for access away from home, or your server’s LAN/VPN address."
+            tr("Use your HTTPS domain for access away from home, or your server’s LAN/VPN address.")
         )
-        form.addRow("Server address", self.url)
+        form.addRow(tr("Server address"), self.url)
         self.token = QLineEdit(self.config.token)
         self.token.setEchoMode(QLineEdit.Password)
-        form.addRow("Server token", self.token)
+        form.addRow(tr("Server token"), self.token)
         self.timeout = QSpinBox()
         self.timeout.setRange(1, 120)
-        self.timeout.setSuffix(" seconds")
+        self.timeout.setSuffix(tr(" seconds"))
         self.timeout.setValue(round(self.config.timeout))
-        form.addRow("Timeout", self.timeout)
-        self.fallback = QCheckBox("Use local Tesseract if the server is unavailable")
+        form.addRow(tr("Timeout"), self.timeout)
+        self.fallback = QCheckBox(tr("Use local Tesseract if the server is unavailable"))
         self.fallback.setChecked(self.config.fallback)
         form.addRow(self.fallback)
         layout.addLayout(form)
         self.privacy = QLabel(
-            "Server mode sends the frozen monitor image and selection crops to the configured server. Google searches still receive only the selected text or crop."
+            tr(
+                "Server mode sends the frozen monitor image and selection crops to the configured server. Google searches still receive only the selected text or crop."
+            )
         )
         self.privacy.setWordWrap(True)
         layout.addWidget(self.privacy)
-        self.test = QPushButton("Check connection")
+        self.test = QPushButton(tr("Check connection"))
         self.test.clicked.connect(self.check_connection)
         self.pending_save = False
         layout.addWidget(self.test)
@@ -81,6 +92,8 @@ class OcrSettingsDialog(QDialog):
         layout.addWidget(self.status)
         self.rejected.connect(self.cancel_pending_save)
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
+        buttons.button(QDialogButtonBox.Save).setText(tr("Save"))
+        buttons.button(QDialogButtonBox.Cancel).setText(tr("Cancel"))
         self.buttons = buttons
         buttons.accepted.connect(self.save_settings)
         buttons.rejected.connect(self.reject)
@@ -98,14 +111,18 @@ class OcrSettingsDialog(QDialog):
         for control in (self.timeout, self.fallback, self.test):
             control.setEnabled(mode != "local" and not self.checking)
         self.test.setText(
-            "Set up / check local GPU" if mode == "gpu" else "Check server connection"
+            tr("Set up / check local GPU") if mode == "gpu" else tr("Check server connection")
         )
         self.privacy.setText(
-            self.desktop.gpu_description
+            tr(self.desktop.gpu_description)
             if mode == "gpu"
-            else "Server mode sends the frozen monitor image and selection crops to your configured CtS backend."
+            else tr(
+                "Server mode sends the frozen monitor image and selection crops to your configured CtS backend."
+            )
             if mode == "server"
-            else "Local Tesseract runs on this computer’s CPU. No OCR images are sent to a server."
+            else tr(
+                "Local Tesseract runs on this computer’s CPU. No OCR images are sent to a server."
+            )
         )
 
     def values(self):
@@ -126,7 +143,9 @@ class OcrSettingsDialog(QDialog):
             return
         self.checked_config = config
         self.status.setText(
-            "Preparing local text recognition…" if config.backend == "gpu" else "Connecting…"
+            tr("Preparing local text recognition…")
+            if config.backend == "gpu"
+            else tr("Connecting…")
         )
         self.checking = True
         self.update_enabled()
@@ -184,6 +203,80 @@ class OcrSettingsDialog(QDialog):
         self.accept()
 
 
+class OcrModelsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.cancelled = False
+        self.setWindowTitle(tr("OCR languages"))
+        self.setStyleSheet("QDialog {background:" + current_theme().background + ";}")
+        layout = QVBoxLayout(self)
+        description = QLabel(
+            tr(
+                "Choose the languages to recognize with local Tesseract. Only missing selected models are downloaded."
+            )
+        )
+        description.setWordWrap(True)
+        layout.addWidget(description)
+        self.backend = QListWidget()
+        self.backend.setMinimumHeight(220)
+        selected = set(selected_models())
+        for model in model_manifest()["models"]:
+            code = model["name"]
+            item = QListWidgetItem(f"{model['label']} · {model['bytes'] / 1e6:.1f} MB")
+            item.setData(Qt.UserRole, code)
+            item.setCheckState(Qt.Checked if code in selected else Qt.Unchecked)
+            self.backend.addItem(item)
+        layout.addWidget(self.backend)
+        self.status = QLabel(tr("Selecting models switches OCR to local Tesseract (CPU)."))
+        self.status.setWordWrap(True)
+        layout.addWidget(self.status)
+        buttons = QDialogButtonBox(QDialogButtonBox.Cancel)
+        buttons.button(QDialogButtonBox.Cancel).setText(tr("Cancel"))
+        self.apply = buttons.addButton(tr("Download and use"), QDialogButtonBox.AcceptRole)
+        buttons.accepted.connect(self.download)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def reject(self):
+        self.cancelled = True
+        super().reject()
+
+    def download(self):
+        self.codes = tuple(
+            item.data(Qt.UserRole)
+            for i in range(self.backend.count())
+            if (item := self.backend.item(i)).checkState() == Qt.Checked
+        )
+        if not self.codes:
+            self.status.setText(tr("Select at least one OCR language."))
+            return
+        self.apply.setEnabled(False)
+        self.backend.setEnabled(False)
+        self.status.setText(tr("Preparing selected OCR models…"))
+        self.task = Task(fetch_models, ocr_model_directory(), self.codes)
+        self.task.signals.done.connect(self.download_finished)
+        self.task.signals.failed.connect(self.download_failed)
+        QThreadPool.globalInstance().start(self.task)
+
+    def download_finished(self, _):
+        if self.cancelled:
+            return
+        config = replace(current_config(), backend="local")
+        try:
+            config.save()
+            set_selected_models(self.codes)
+            configure_ocr(config)
+        except (OSError, ValueError) as error:
+            self.download_failed(str(error))
+            return
+        self.accept()
+
+    def download_failed(self, message):
+        self.status.setText(tr("Could not prepare the OCR models.") + " " + message)
+        self.apply.setEnabled(True)
+        self.backend.setEnabled(True)
+
+
 class OcrSettingsPanel(QWidget):
     """Keep settings in the same Wayland layer surface as the selection UI.
 
@@ -194,7 +287,7 @@ class OcrSettingsPanel(QWidget):
 
     finished = Signal(int)
 
-    def __init__(self, parent):
+    def __init__(self, parent, dialog_factory=OcrSettingsDialog):
         super().__init__(parent)
         self.setObjectName("ocrSettingsCover")
         self.completed = False
@@ -202,10 +295,10 @@ class OcrSettingsPanel(QWidget):
         self.setAttribute(Qt.WA_StyledBackground)
         self.setCursor(Qt.ArrowCursor)
         self.setStyleSheet("QWidget#ocrSettingsCover {background:rgba(0,0,0,120);}")
-        self.dialog = OcrSettingsDialog(self)
+        self.dialog = dialog_factory(self)
         self.dialog.setWindowFlags(Qt.Widget)
         self.dialog.setModal(False)
-        heading = QLabel("Text recognition")
+        heading = QLabel(self.dialog.windowTitle())
         heading.setStyleSheet("font-size:19px;font-weight:600;")
         self.dialog.layout().insertWidget(0, heading)
         self.scroll = QScrollArea(self)

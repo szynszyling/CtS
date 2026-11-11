@@ -57,7 +57,8 @@ SEARCH_CHROME = r"""(() => {
     style.textContent+=aiMode ? 'body > header{display:none!important}' :
         'body > :is(div,span):has(~ #main):not([role="main"]):not(:has([role="main"])),#cnt > div:has(~ #rcnt):not([role="main"]):not(:has([role="main"])){display:none!important}';
     document.head.appendChild(style);
-    const names=new Set(['ai mode','all','images','videos','shopping','news','forums','maps','books','web','more','tools','search tools','exact matches','visual matches','feedback']);
+    const names=new Set(['ai mode','all','images','videos','shopping','news','forums','maps','books','web','more','tools','search tools','exact matches','visual matches','feedback',
+        'tryb ai','wszystko','grafika','wideo','zakupy','wiadomości','fora','mapy','książki','sieć','więcej','narzędzia','dokładne dopasowania','dopasowania wizualne']);
     const name=a=>a.textContent.trim().toLowerCase().replace(/\s+/g,' ');
     function hideTabs() {
         const links=[...document.querySelectorAll('a[href]')].filter(a=>names.has(name(a)));
@@ -94,7 +95,8 @@ TRANSLATE_CHROME = r"""(() => {
         for(const header of document.querySelectorAll('#gb,header,[role="banner"]')) {
             for(const control of header.querySelectorAll('a,button,[role="button"]')) {
                 const label=(control.getAttribute('aria-label') || control.textContent).trim().toLowerCase();
-                if(label==='sign in' || label==='google apps') control.style.setProperty('display','none','important');
+                if(['sign in','google apps','zaloguj się','aplikacje google'].includes(label))
+                    control.style.setProperty('display','none','important');
             }
         }
     }

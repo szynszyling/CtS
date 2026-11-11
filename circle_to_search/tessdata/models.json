@@ -5,17 +5,116 @@
     {
       "name": "eng",
       "sha256": "8280aed0782fe27257a68ea10fe7ef324ca0f8d85bd2fd145d1c2b560bcb66ba",
-      "bytes": 15400601
+      "bytes": 15400601,
+      "label": "English"
     },
     {
       "name": "jpn",
       "sha256": "36bdf9ac823f5911e624c30d0553e890b8abc7c31a65b3ef14da943658c40b79",
-      "bytes": 14330109
+      "bytes": 14330109,
+      "label": "日本語"
     },
     {
       "name": "jpn_vert",
       "sha256": "1258be6eb2a9851f18043234ad18cca13ed32690bfff62b335c898bbea371548",
-      "bytes": 14330809
+      "bytes": 14330809,
+      "label": "日本語（縦書き）"
+    },
+    {
+      "name": "pol",
+      "label": "Polski",
+      "sha256": "e80cc4cefbdface06e9223f43f089556b9dcf104020fbc0a200f6863c57d4405",
+      "bytes": 11978867
+    },
+    {
+      "name": "deu",
+      "label": "Deutsch",
+      "sha256": "8407331d6aa0229dc927685c01a7938fc5a641d1a9524f74838cdac599f0d06e",
+      "bytes": 8628461
+    },
+    {
+      "name": "fra",
+      "label": "Français",
+      "sha256": "907743d98915c91a3906dfbf6e48b97598346698fe53aaa797e1a064ffcac913",
+      "bytes": 3972885
+    },
+    {
+      "name": "spa",
+      "label": "Español",
+      "sha256": "e2c1ffdad8b30f26c45d4017a9183d3a7f9aa69e59918be4f88b126fac99ab2c",
+      "bytes": 13570187
+    },
+    {
+      "name": "ita",
+      "label": "Italiano",
+      "sha256": "8df9c89176fb93f56bf4b2d4ede04c01c1f31d4b7697fbd76cc336df700f3f38",
+      "bytes": 8863635
+    },
+    {
+      "name": "por",
+      "label": "Português",
+      "sha256": "711de9dbb8052067bd42f16b9119967f30bada80d57e2ef24f65d09f531adb04",
+      "bytes": 8159939
+    },
+    {
+      "name": "ces",
+      "label": "Čeština",
+      "sha256": "d821773116d3c4e0360ea750066436c60ae45af02c39da3a840a543d761b3f41",
+      "bytes": 10918912
+    },
+    {
+      "name": "ukr",
+      "label": "Українська",
+      "sha256": "1277f6e3b6f707063a92d40e7678e7f57154e8414e328e340be9ee9275eea9c8",
+      "bytes": 10859081
+    },
+    {
+      "name": "rus",
+      "label": "Русский",
+      "sha256": "b617eb6830ffabaaa795dd87ea7fd251adfe9cf0efe05eb9a2e8128b7728d6b6",
+      "bytes": 15301764
+    },
+    {
+      "name": "bul",
+      "label": "Български",
+      "sha256": "87322f07ae023d0f61d3c12507f6f1ed22411c00f1b2e722d2e13b723584fad1",
+      "bytes": 8844613
+    },
+    {
+      "name": "srp",
+      "label": "Српски",
+      "sha256": "b090f9bb22366d9b4b0cb6baa2136c4f75e992ddba01ecb78240896e359e4072",
+      "bytes": 9345851
+    },
+    {
+      "name": "ell",
+      "label": "Ελληνικά",
+      "sha256": "288b4ea00bab450cf39893d22f04a2835a8469b673b5b20dcb39b159d1bbc9b8",
+      "bytes": 8945021
+    },
+    {
+      "name": "tur",
+      "label": "Türkçe",
+      "sha256": "e0c3338dc17503dc7d335a507c9ae01b2b46cfd07561171e1e1ac55d85e8e438",
+      "bytes": 7456265
+    },
+    {
+      "name": "kor",
+      "label": "한국어",
+      "sha256": "f888d4038348a0c3d25151e7f452bda0d74ca275b18cab146798bcbb94084fff",
+      "bytes": 12528128
+    },
+    {
+      "name": "chi_sim",
+      "label": "简体中文",
+      "sha256": "4fef2d1306c8e87616d4d3e4c6c67faf5d44be3342290cf8f2f0f6e3aa7e735b",
+      "bytes": 13077423
+    },
+    {
+      "name": "chi_tra",
+      "label": "繁體中文",
+      "sha256": "1aa60488574cafa69486d919284f079ca9b68fcc7f6ad8dc1ff1b318dfd97028",
+      "bytes": 12985735
     }
   ]
 }

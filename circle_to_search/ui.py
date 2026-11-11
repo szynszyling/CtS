@@ -30,6 +30,13 @@ from PySide6.QtWidgets import QApplication, QDialog, QFileDialog, QLabel, QMenu,
 from .appearance import current_theme, theme_manager
 from .geometry import pixel_bounds
 from .gestures import Selection, resolve_gesture
+from .languages import (
+    DISPLAY_LANGUAGES,
+    display_language,
+    retranslate_widgets,
+    set_display_language,
+    tr,
+)
 from .motion import fade, move
 from .ocr import Document, Glyph, default_languages, encode_png, gesture_region, recognize_document
 from .platforms import get_backend
@@ -104,14 +111,16 @@ class SelectionOverlay(QWidget):
         self.setMouseTracking(True)
         self.setScreen(screen)
         self.setGeometry(screen.geometry())
-        self.close_button = IconButton("close", "Close Circle to Search (Esc)", self, light=True)
+        self.close_button = IconButton(
+            "close", tr("Close Circle to Search (Esc)"), self, light=True
+        )
         self.close_button.clicked.connect(self.cancelled.emit)
         self.wordmark = QLabel("Google", self)
         self.wordmark.setStyleSheet(
             "color:white; background:transparent; font-size:23px; font-weight:500;"
         )
         self.wordmark.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.more_button = IconButton("dots", "More options", self, light=True)
+        self.more_button = IconButton("dots", tr("More options"), self, light=True)
         self.more_button.clicked.connect(self.show_menu)
         self.bar = SearchPill(self)
         self.bar.enable_dragging()
@@ -119,7 +128,7 @@ class SelectionOverlay(QWidget):
         self.bar.submitted.connect(self.submit)
         self.bar.imageRequested.connect(self.search_image)
         self.bar.translateRequested.connect(self.translate)
-        self.hint = QLabel("Circle, highlight, scribble or tap to search", self)
+        self.hint = QLabel(tr("Circle, highlight, scribble or tap to search"), self)
         self.hint.setObjectName("hint")
         self.hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.hint.adjustSize()
@@ -360,9 +369,9 @@ class SelectionOverlay(QWidget):
         self.vertical = not self.vertical
         self.clear_selection()
         self.hint.setText(
-            "Vertical Japanese text — draw across or along the characters"
+            tr("Vertical Japanese text — draw across or along the characters")
             if self.vertical
-            else "Circle, highlight, scribble or tap to search"
+            else tr("Circle, highlight, scribble or tap to search")
         )
         self.hint.adjustSize()
         self.start_recognition()
@@ -646,7 +655,7 @@ class SelectionOverlay(QWidget):
                 self.ocr_pending or (self.recognition_enabled and self.full_document is None)
             ) and not self.box_drag:
                 self.pending_gesture = (list(self.points), self.box_drag)
-                self.hint.setText("Selecting…")
+                self.hint.setText(tr("Selecting…"))
                 self.hint.adjustSize()
                 fade(self.hint, True)
                 self.start_region_recognition(self.points)
@@ -719,7 +728,7 @@ class SelectionOverlay(QWidget):
         self.sheet.bar.set_selection(crop if selection.kind == "image" else None, selection.text)
         self.position_text_actions()
         self.sheet.loading(
-            "Searching…" if self.auto_search else "Selection ready. Press Enter to search."
+            tr("Searching…") if self.auto_search else tr("Selection ready. Press Enter to search.")
         )
         self.selected.emit(
             crop, selection.bounds.translated(QPointF(self.screen().geometry().topLeft()))
@@ -740,7 +749,7 @@ class SelectionOverlay(QWidget):
                 self.display_url(text_search_url(query))
             return
         generation = self.generation
-        self.sheet.loading("Searching with Google Lens…")
+        self.sheet.loading(tr("Searching with Google Lens…"))
         self.sheet.bar.query.setText(query)
         if not self.external:
             self.sheet.search_image(encode_png(self.crop()), query)
@@ -778,7 +787,7 @@ class SelectionOverlay(QWidget):
             self.generation += 1
             fade(self.bar, False)
             self.sheet.loading("Translating…")
-            self.display_url(translation_url(text, "en"))
+            self.display_url(translation_url(text))
 
     def copy_text(self):
         if self.selection and self.selection.kind == "text":
@@ -813,7 +822,7 @@ class SelectionOverlay(QWidget):
         self.text_actions.dismiss()
         self.bar.set_selection()
         fade(self.bar, True)
-        self.hint.setText("Circle, highlight, scribble or tap to search")
+        self.hint.setText(tr("Circle, highlight, scribble or tap to search"))
         self.hint.adjustSize()
         fade(self.hint, True)
         self.resizeEvent(None)
@@ -834,50 +843,70 @@ class SelectionOverlay(QWidget):
         else:
             self.cancelled.emit()
 
-    def edit_ocr_settings(self):
+    def edit_ocr_settings(self, *, models=False):
         if self.ocr_settings_panel is not None:
             self.ocr_settings_panel.raise_()
             return
-        from .ocr_settings import OcrSettingsPanel
+        from .ocr_settings import OcrModelsDialog, OcrSettingsDialog, OcrSettingsPanel
 
         self.dragging = False
         self.drag_handle = None
         self.points = []
-        panel = OcrSettingsPanel(self)
+        panel = OcrSettingsPanel(self, OcrModelsDialog if models else OcrSettingsDialog)
         self.ocr_settings_panel = panel
-        panel.finished.connect(self.ocr_settings_finished)
+        panel.finished.connect(lambda result: self.ocr_settings_finished(result, models=models))
         self.search_shortcut.setEnabled(False)
         self.vertical_shortcut.setEnabled(False)
         self.text_actions.dismiss()
         panel.present()
 
-    def ocr_settings_finished(self, result):
+    def ocr_settings_finished(self, result, *, models=False):
         self.ocr_settings_panel = None
         self.search_shortcut.setEnabled(True)
         self.vertical_shortcut.setEnabled(True)
         self.setFocus(Qt.OtherFocusReason)
         self.position_text_actions()
         if result == QDialog.DialogCode.Accepted:
+            if models:
+                self.language = default_languages()
+                self.vertical = self.language == "jpn_vert"
             self.ocrSettingsChanged.emit()
+
+    def change_display_language(self, code):
+        previous = display_language()
+        if previous != code:
+            set_display_language(code)
+            for widget in QApplication.topLevelWidgets():
+                if isinstance(widget, SelectionOverlay):
+                    retranslate_widgets(widget, previous)
+                    widget.hint.adjustSize()
+                    widget.resizeEvent(None)
+                    if widget.sheet.isVisible() and widget.sheet.current_url:
+                        from .search import normalize_search_url
+
+                        url = normalize_search_url(widget.sheet.current_url)
+                        if url != widget.sheet.current_url:
+                            widget.sheet.loading()
+                            widget.sheet.load_url(url)
 
     def show_menu(self):
         menu = QMenu(self)
-        menu.addAction("New selection", self.clear_selection)
-        menu.addAction("Copy text", self.copy_text).setEnabled(
+        menu.addAction(tr("New selection"), self.clear_selection)
+        menu.addAction(tr("Copy text"), self.copy_text).setEnabled(
             bool(self.selection and self.selection.kind == "text")
         )
-        menu.addAction("Copy image", self.copy_image).setEnabled(self.selection is not None)
-        menu.addAction("Save image…", self.save_image).setEnabled(self.selection is not None)
+        menu.addAction(tr("Copy image"), self.copy_image).setEnabled(self.selection is not None)
+        menu.addAction(tr("Save image…"), self.save_image).setEnabled(self.selection is not None)
         menu.addSeparator()
         manager = theme_manager()
         if manager:
-            themes = menu.addMenu("Theme")
+            themes = menu.addMenu(tr("Theme"))
             group = QActionGroup(themes)
             group.setExclusive(True)
             for mode, label in (
-                ("auto", "Automatic (" + manager.source.label + ")"),
-                ("light", "Light"),
-                ("dark", "Dark"),
+                ("auto", tr("Automatic") + " (" + manager.source.label + ")"),
+                ("light", tr("Light")),
+                ("dark", tr("Dark")),
             ):
                 action = themes.addAction(label)
                 action.setCheckable(True)
@@ -885,17 +914,26 @@ class SelectionOverlay(QWidget):
                 group.addAction(action)
                 action.triggered.connect(lambda checked, mode=mode: manager.set_mode(mode))
             menu.addSeparator()
-        automatic = menu.addAction("Search automatically after selecting")
+        automatic = menu.addAction(tr("Search automatically after selecting"))
         automatic.setCheckable(True)
         automatic.setChecked(self.auto_search)
         automatic.toggled.connect(lambda value: setattr(self, "auto_search", value))
-        menu.addAction("Text recognition…", self.edit_ocr_settings)
-        vertical = menu.addAction("Vertical Japanese text")
+        menu.addAction(tr("Text recognition…"), self.edit_ocr_settings)
+        menu.addAction(tr("OCR languages…"), lambda: self.edit_ocr_settings(models=True))
+        languages = menu.addMenu(tr("Display language"))
+        language_group = QActionGroup(languages)
+        for code, label in DISPLAY_LANGUAGES.items():
+            action = languages.addAction(label)
+            action.setCheckable(True)
+            action.setChecked(code == display_language())
+            language_group.addAction(action)
+            action.triggered.connect(lambda checked, code=code: self.change_display_language(code))
+        vertical = menu.addAction(tr("Vertical Japanese text"))
         vertical.setCheckable(True)
         vertical.setChecked(self.vertical)
         vertical.triggered.connect(self.toggle_vertical)
         move = menu.addAction(
-            "Move search bar to bottom" if self.bar_at_top else "Move search bar to top"
+            tr("Move search bar to bottom") if self.bar_at_top else tr("Move search bar to top")
         )
 
         def move_bar():
@@ -914,10 +952,12 @@ class SelectionOverlay(QWidget):
         move.triggered.connect(move_bar)
         menu.addSeparator()
         menu.addAction(
-            "Open Google Lens",
-            lambda: self.externalRequested.emit(QUrl("https://www.google.com/imghp")),
+            tr("Open Google Lens"),
+            lambda: self.externalRequested.emit(
+                QUrl("https://www.google.com/imghp?hl=" + display_language())
+            ),
         )
-        menu.addAction("Close", self.cancelled.emit)
+        menu.addAction(tr("Close"), self.cancelled.emit)
         menu.popup(self.more_button.mapToGlobal(self.more_button.rect().bottomRight()))
 
     def closeEvent(self, event):

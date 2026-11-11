@@ -10,3 +10,12 @@ def config_directory() -> Path:
     if not root:
         raise RuntimeError("The operating system did not provide a configuration directory.")
     return Path(root) / "circle-to-search"
+
+
+def ocr_model_directory() -> Path:
+    root = QStandardPaths.writableLocation(QStandardPaths.GenericDataLocation)
+    return (
+        Path(root) / "circle-to-search" / "ocr-models"
+        if root
+        else config_directory() / "ocr-models"
+    )

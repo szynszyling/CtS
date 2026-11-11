@@ -147,6 +147,19 @@ class SearchTests(unittest.TestCase):
         ]:
             self.assertEqual(normalize_search_url(url), url)
 
+    @patch("circle_to_search.search.display_language", return_value="pl")
+    def test_polish_preference_is_kept_across_search_tabs_and_translate(self, _):
+        search = text_search_url("Zażółć")
+        images = search_tab_url(search, "images")
+        translation = translation_url("hello")
+        for url in (search, images, translation):
+            params = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+            self.assertEqual(params["hl"], ["pl"])
+        self.assertEqual(search_tab(images), "images")
+        self.assertEqual(
+            urllib.parse.parse_qs(urllib.parse.urlsplit(translation).query)["tl"], ["pl"]
+        )
+
     def test_browser_handoff_keeps_query_and_lens_session_on_the_public_route(self):
         url = "https://www.google.com/search?q=日本語&vsrid=image123&udm=24&gsc=2"
         params = urllib.parse.parse_qs(urllib.parse.urlsplit(browser_search_url(url)).query)

@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 from shiboken6 import delete, isValid
 
 from .appearance import current_theme, theme_manager
+from .languages import GOOGLE_LANGUAGES, display_language, tr
 from .search import (
     LENS_UPLOAD_URL,
     browser_search_url,
@@ -65,6 +66,7 @@ def create_browser(parent):
             self.cookie_timer.timeout.connect(self.load_pending)
 
         def load(self, url):
+            self.profile.setHttpAcceptLanguage(GOOGLE_LANGUAGES[display_language()])
             self.pending_url = url
             if self.cookie_ready:
                 self.load_pending()
@@ -90,7 +92,9 @@ def create_browser(parent):
         def upload_image(self, png, query=""):
             self.image_query = query
             body, content_type = lens_upload_data(png)
-            request = QWebEngineHttpRequest(QUrl(LENS_UPLOAD_URL + "?hl=en&ep=ccm&s=csp"))
+            request = QWebEngineHttpRequest(
+                QUrl(LENS_UPLOAD_URL + "?hl=" + display_language() + "&ep=ccm&s=csp")
+            )
             request.setMethod(QWebEngineHttpRequest.Method.Post)
             request.setHeader(b"Content-Type", content_type.encode())
             request.setPostData(body)
@@ -149,7 +153,7 @@ def create_browser(parent):
         profile.setPersistentCookiesPolicy(
             QWebEngineProfile.PersistentCookiesPolicy.AllowPersistentCookies
         )
-        profile.setHttpAcceptLanguage("en-US,en;q=0.9")
+        profile.setHttpAcceptLanguage(GOOGLE_LANGUAGES[display_language()])
         profile.settings().setUnknownUrlSchemePolicy(
             QWebEngineSettings.AllowUnknownUrlSchemesFromUserInteraction
         )
@@ -175,7 +179,7 @@ def create_browser(parent):
         const url=new URL(link.href,location.href);
         if (!['www.google.com','google.com','lens.google.com'].includes(url.hostname) || url.pathname!=='/search') return;
         for (const key of ['cs','gl','gsc','lr']) url.searchParams.delete(key);
-        url.searchParams.set('hl','en');
+        url.searchParams.set('hl', new URL(location.href).searchParams.get('hl') || navigator.language.split('-')[0]);
         event.preventDefault(); event.stopImmediatePropagation();
         location.assign(url.href);
     },true);""")
@@ -227,14 +231,14 @@ class ResultSheet(QFrame):
         layout.setSpacing(8)
         handle_row = QHBoxLayout()
         handle_row.setSpacing(0)
-        self.back = IconButton("back", "Back to selection")
+        self.back = IconButton("back", tr("Back to selection"))
         self.back.clicked.connect(self.cleared.emit)
         handle_row.addWidget(self.back)
         self.handle = SheetHandle()
         self.handle.dragged.connect(self.move_and_resize)
         self.handle.clicked.connect(self.toggle)
         handle_row.addWidget(self.handle, 1)
-        self.external = IconButton("external", "Open results in your browser")
+        self.external = IconButton("external", tr("Open results in your browser"))
         self.external.setEnabled(False)
         self.external.clicked.connect(self.open_external)
         handle_row.addWidget(self.external)
@@ -247,7 +251,7 @@ class ResultSheet(QFrame):
         self.tabs.requested.connect(self.navigate_tab)
         self.tabs.filterRequested.connect(self.filter_time)
         layout.addWidget(self.tabs)
-        self.verification = QLabel("Complete Google's verification below to continue.")
+        self.verification = QLabel(tr("Complete Google's verification below to continue."))
         self.verification.setObjectName("status")
         self.verification.setWordWrap(True)
         self.verification.hide()
@@ -264,12 +268,12 @@ class ResultSheet(QFrame):
         )
         messages = QVBoxLayout(self.message_page)
         messages.addStretch()
-        self.message = QLabel("Searching…")
+        self.message = QLabel(tr("Searching…"))
         self.message.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.message.setWordWrap(True)
         self.message.setObjectName("status")
         messages.addWidget(self.message)
-        self.fallback = QPushButton("Open in browser")
+        self.fallback = QPushButton(tr("Open in browser"))
         self.fallback.clicked.connect(self.open_external)
         self.fallback.hide()
         messages.addWidget(self.fallback, alignment=Qt.AlignmentFlag.AlignCenter)
@@ -427,7 +431,7 @@ class ResultSheet(QFrame):
         )
         self.show_sheet(True)
 
-    def loading(self, text="Searching…"):
+    def loading(self, text=None):
         self.load_expired = False
         self.display_generation += 1
         self.current_url = ""
@@ -438,7 +442,7 @@ class ResultSheet(QFrame):
         self.external.setEnabled(False)
         self.tabs.setEnabled(bool(self.bar.query.text().strip()))
         self.tabs.show()
-        self.message.setText(text)
+        self.message.setText(text or tr("Searching…"))
         self.fallback.hide()
         self.content.setCurrentWidget(self.message_page)
         self.show_sheet()
@@ -530,7 +534,7 @@ class ResultSheet(QFrame):
         self.load_url(url)
 
     def search_image(self, png, query=""):
-        self.loading("Searching with Google Lens…")
+        self.loading(tr("Searching with Google Lens…"))
         try:
             self.ensure_browser()
             self.content.setCurrentWidget(self.message_page)
@@ -632,7 +636,7 @@ class ResultSheet(QFrame):
             self.show_http_status(self.last_error_code)
         else:
             self.error(
-                "Google could not load these results. Try opening the search in your browser."
+                tr("Google could not load these results. Try opening the search in your browser.")
             )
 
     def loading_info(self, info):
@@ -650,12 +654,16 @@ class ResultSheet(QFrame):
         if code == 429:
             self.content.setCurrentWidget(self.browser)
             self.verification.setText(
-                "Google is limiting searches. Complete any verification shown below, or open this search in your browser."
+                tr(
+                    "Google is limiting searches. Complete any verification shown below, or open this search in your browser."
+                )
             )
         elif code == 403:
             self.verification.hide()
             self.error(
-                "Google denied this embedded search (HTTP 403). Open the search in your normal browser to use its existing session."
+                tr(
+                    "Google denied this embedded search (HTTP 403). Open the search in your normal browser to use its existing session."
+                )
             )
             return
         else:
@@ -675,7 +683,9 @@ class ResultSheet(QFrame):
         self.navigation_in_progress = False
         self.theme_reload_pending = False
         self.browser.stop()
-        self.error("Google took too long to respond. Try again or open the search in your browser.")
+        self.error(
+            tr("Google took too long to respond. Try again or open the search in your browser.")
+        )
 
     def stop(self, animate=False):
         self.load_deadline.stop()

@@ -31,6 +31,8 @@ Press **Meta + Shift + G** on Plasma or **Win + Shift + G** on Windows, draw aro
 
 *OCR means text recognition: turning the words in a screenshot into selectable text.*
 
+Open **⋮ → Display language** to choose English or Polski. Google Search, Lens and Translate follow that choice. Open **⋮ → OCR languages…** to choose and download models for local Tesseract. Available packs include Polish, other Latin-script languages, Ukrainian, Russian, Bulgarian, Serbian Cyrillic, Greek, Japanese, Korean and Chinese. The GPU and server engines have their own language support.
+
 ## Supported systems 🖥️
 
 | System | Status |

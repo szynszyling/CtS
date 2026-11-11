@@ -13,6 +13,8 @@ from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QRectF, Qt
 from PySide6.QtGui import QImage
 
 from .geometry import selection_bounds
+from .languages import selected_models
+from .paths import ocr_model_directory
 
 MODEL_DIR = Path(__file__).with_name("tessdata")
 
@@ -45,7 +47,7 @@ def is_cjk(text: str) -> bool:
 
 
 def default_languages() -> str:
-    return "jpn+eng"
+    return "+".join(code for code in selected_models() if code != "jpn_vert") or "jpn_vert"
 
 
 def gesture_region(points, viewport: QRectF, vertical=False) -> QRectF:
@@ -227,6 +229,7 @@ def recognize_tesseract(
     if not binary:
         raise RuntimeError("Install Tesseract to select text. Image search is still available.")
     language = language or default_languages()
+    vertical = vertical or language == "jpn_vert"
     if vertical:
         language = "jpn_vert"
     # Small desktop glyphs need more pixels for Japanese strokes. Work at 2x
@@ -256,8 +259,16 @@ def recognize_tesseract(
         "hocr_char_boxes=1",
     ]
     requested = language.split("+")
-    if all((MODEL_DIR / f"{name}.traineddata").exists() for name in requested):
-        command.extend(["--tessdata-dir", str(MODEL_DIR)])
+    directory = next(
+        (
+            path
+            for path in (ocr_model_directory(), MODEL_DIR)
+            if all((path / f"{name}.traineddata").exists() for name in requested)
+        ),
+        None,
+    )
+    if directory is not None:
+        command.extend(["--tessdata-dir", str(directory)])
     else:
         available = subprocess.run(
             [binary, "--list-langs"],
