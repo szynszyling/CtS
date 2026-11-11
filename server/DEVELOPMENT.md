@@ -1,10 +1,20 @@
 # OCR backend development
 
-The service is independent of Qt and the desktop platform adapters. It uses PP-OCRv5 through ncnn/Vulkan, with CTC-aligned character boxes for English, Japanese and Chinese. CPU reference mode is explicit; GPU mode rejects software Vulkan renderers and refuses a silent CPU fallback.
+The service is independent of Qt and the desktop platform adapters. It uses ncnn/Vulkan for all 19 language choices, with CTC-aligned character boxes. CPU reference mode is available through `--device cpu`.
 
 ## Models and inference
 
-`cts_ocr_server/models.json` pins the PP-OCRv5 files. The Docker build also verifies and bundles every Tesseract model from the shared desktop manifest. Requests that include languages outside the PP-OCRv5 set use Tesseract with the requested models on the server CPU. Both paths work offline and return the same character-box format. Sources and licenses are listed in [THIRD_PARTY.md](THIRD_PARTY.md).
+`cts_ocr_server/models.json` pins the original PP-OCRv5 detector and CJK recognizer. `build_models.py` pins the RapidOCR ONNX exports, dictionaries and pnnx converter by SHA-256. It converts the multilingual PP-OCRv6 small model for Latin languages and PP-OCRv5 recognizers for Cyrillic, Greek and Korean to ncnn FP32. Sources and licenses are listed in [THIRD_PARTY.md](THIRD_PARTY.md).
+
+Docker build arguments choose the bundle. `OCR_PROFILE=server` is the default and includes all recognizers. `OCR_PROFILE=local` requires `OCR_LANGUAGES` with CtS codes separated by `+`.
+
+```sh
+docker build -f server/Dockerfile --target final --build-arg OCR_PROFILE=local --build-arg OCR_LANGUAGES=eng+pol -t cts-ocr:local .
+```
+
+The local image in this example contains the shared detector and the multilingual Latin recognizer. Languages that share a recognizer reuse its files. `bundle.json` records the profile, enabled language codes and included recognizers. The runtime reads this bundle without downloading additional models. Health reports its profile and enabled languages.
+
+Requests run each required recognizer on a detected line and keep the highest-confidence result for that line. Selecting multiple scripts increases inference work. A line containing several scripts may need a recognizer trained to cover that combination.
 
 Both networks use FP32 storage/arithmetic. Reduced precision produced corrupt results on the tested Intel HD 630; keep FP32 unless a separately tested implementation replaces it. Non-finite or invalid probability distributions are rejected before decoding. A startup test recognizes two known text images and checks a blank image before the API becomes ready.
 
@@ -32,24 +42,24 @@ Production users copy only the root `compose.yaml`. The `server/compose*.yaml` f
 ```sh
 docker build --target test -f server/Dockerfile -t circle-to-search-ocr:test .
 docker compose --env-file server/.env -f server/compose.yaml -f server/compose.build.yaml build
-python3 tools/smoke/ocr_server.py --docker circle-to-search-ocr:0.13.0 --gpu-name AMD
-python3 tools/smoke/ocr_server.py --docker circle-to-search-ocr:0.13.0 --device cpu
-python3 tools/smoke/ocr_server.py --docker circle-to-search-ocr:0.13.0 --gpu-name AMD --detector-scale 1.5
-python3 tools/smoke/ocr_https.py --image circle-to-search-ocr:0.13.0
-python3 tools/smoke/compose.py --image circle-to-search-ocr:0.13.0
+python3 tools/smoke/ocr_server.py --docker circle-to-search-ocr:0.14.0 --gpu-name AMD
+python3 tools/smoke/ocr_server.py --docker circle-to-search-ocr:0.14.0 --device cpu
+python3 tools/smoke/ocr_server.py --docker circle-to-search-ocr:0.14.0 --gpu-name AMD --detector-scale 1.5
+python3 tools/smoke/ocr_https.py --image circle-to-search-ocr:0.14.0
+python3 tools/smoke/compose.py --image circle-to-search-ocr:0.14.0
 ```
 
 The tests use generated text, including 14px light/dark Japanese and vertical character selection. The HTTPS check uses an isolated Docker network, the exact SWAG virtual host, a temporary trusted test certificate and a CPU reference backend. It checks bearer forwarding, rejection of an invalid token, upload limits and rejection of an untrusted TLS certificate. It does not change a working SWAG container or desktop configuration.
 
 ## Performance reference
 
-The FP32 Radeon 610M container measured roughly 65–90 ms across the small synthetic fixtures; explicit CPU reference mode on a Ryzen 7800X3D measured 35–51 ms. The remote HD 630 measured roughly 310–440 ms including LAN round trips. A tighter Japanese crop reduced a three-request median from 393 ms to 193 ms on that server. These are fixture measurements, not full-screen or off-site guarantees.
+The multilingual Radeon fixture run measured roughly 43–56 ms with one script group requested and 78–127 ms with every group requested. The Polish sample `Zażółć gęślą jaźń` matched exactly. A Czech sample lost the accent on `ť`, so recognition accuracy still depends on the input. Earlier CJK measurements on the remote HD 630 were roughly 310–440 ms including LAN round trips. These are synthetic fixture measurements.
 
 Measure the actual device, fonts, image sizes and transport before changing defaults. Do not present a CPU path as GPU acceleration or assume a GPU is faster for every small request.
 
 ## Publish a public release
 
-Update the server version in `pyproject.toml`, `cts_ocr_server/__init__.py`, Docker/image defaults and documentation, then commit and push. Create a matching tag such as `ocr-v0.13.0`.
+Update the server version in `pyproject.toml`, `cts_ocr_server/__init__.py`, Docker/image defaults and documentation, then commit and push. Create a matching tag such as `ocr-v0.14.0`.
 
 The release workflow gates publishing on desktop/backend tests, model self-tests and real HTTPS/OCR integration. It tags the exact tested image and publishes version, source-commit and `latest` tags to GHCR using the repository’s temporary `GITHUB_TOKEN`, then pulls it back. OCI labels identify its source, version and revision.
 

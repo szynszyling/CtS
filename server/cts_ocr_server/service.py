@@ -19,13 +19,11 @@ from . import __version__
 MAX_BYTES = 16 * 1024 * 1024
 MAX_PIXELS = 24_000_000
 API_VERSION = 1
-NCNN_LANGUAGES = frozenset({"eng", "jpn", "jpn_vert", "chi_sim", "chi_tra"})
 
 
 class InferenceWorker:
-    def __init__(self, engine, tesseract=None):
+    def __init__(self, engine):
         self.engine = engine
-        self.tesseract = tesseract
         self.queue = PriorityQueue(maxsize=8)
         self.counter = count()
         self.thread = threading.Thread(target=self.run, name="cts-ocr-inference", daemon=True)
@@ -48,24 +46,21 @@ class InferenceWorker:
             return
         started = time.monotonic()
         try:
-            if language is None:
-                glyphs = self.engine.recognize(
-                    image, vertical, on_yield=None if interactive else self.interrupt_background
-                )
-                engine, device = "ppocrv5-ncnn", self.engine.device_name
-                accelerated = self.engine.device == "vulkan"
-            else:
-                glyphs = self.tesseract.recognize(image, language, vertical)
-                engine, device, accelerated = "tesseract", "CPU", False
+            glyphs = self.engine.recognize(
+                image,
+                vertical,
+                on_yield=None if interactive else self.interrupt_background,
+                language=language,
+            )
             result = {
                 "service": "circle-to-search-ocr",
                 "api_version": API_VERSION,
                 "width": image.width,
                 "height": image.height,
                 "glyphs": glyphs,
-                "engine": engine,
-                "device": device,
-                "accelerated": accelerated,
+                "engine": "ppocrv5-ncnn",
+                "device": self.engine.device_name,
+                "accelerated": self.engine.device == "vulkan",
                 "elapsed_ms": round((time.monotonic() - started) * 1000, 2),
                 "queue_ms": round((started - submitted) * 1000, 2),
             }
@@ -113,14 +108,15 @@ class InferenceWorker:
         self.thread.join(timeout=30)
 
 
-def create_app(engine, token="", tesseract=None):
+def create_app(engine, token=""):
     if not engine.self_test_passed:
         raise RuntimeError(
             "The OCR engine must pass its recognition self-test before serving requests."
         )
-    tesseract_languages = tesseract.languages if tesseract else frozenset()
-    languages = NCNN_LANGUAGES | tesseract_languages
-    worker = InferenceWorker(engine, tesseract)
+    languages = frozenset(engine.languages)
+    default_language = "+".join(code for code in ("jpn", "eng") if code in languages)
+    default_language = default_language or engine.languages[0]
+    worker = InferenceWorker(engine)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -160,24 +156,27 @@ def create_app(engine, token="", tesseract=None):
             "accelerated": engine.device == "vulkan",
             "queued": worker.queue.qsize(),
             "languages": sorted(languages),
+            "profile": engine.profile,
             "character_boxes": True,
         }
 
     @app.post("/v1/ocr")
     async def ocr(
         request: Request,
-        language: str = "jpn+eng",
+        language: str | None = None,
         vertical: bool = False,
         priority: str = "background",
     ):
         authorize(request)
-        codes = set(language.split("+"))
-        use_tesseract = not codes <= NCNN_LANGUAGES
-        supported = tesseract_languages if use_tesseract else NCNN_LANGUAGES
-        if not codes <= supported:
+        codes = tuple(
+            dict.fromkeys((default_language if language is None else language).split("+"))
+        )
+        if not set(codes) <= languages:
             raise HTTPException(422, "One or more requested OCR languages are unavailable.")
-        language = "+".join(dict.fromkeys(language.split("+"))) if use_tesseract else None
-        vertical = vertical or codes == {"jpn_vert"}
+        if vertical and "jpn_vert" in languages:
+            codes = ("jpn_vert",)
+        vertical = vertical or codes == ("jpn_vert",)
+        language = "+".join(codes)
         if priority not in ("background", "interactive"):
             raise HTTPException(422, "Unknown request priority.")
         if request.headers.get("Content-Type", "").split(";")[0] != "image/png":

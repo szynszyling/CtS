@@ -13,10 +13,16 @@ class ManagedBackendTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.previous = (managed_ocr._CONNECTION, managed_ocr._GPU_NAME)
+        self.languages = ("eng", "jpn")
+        self.language_patch = patch.object(
+            managed_ocr, "selected_models", return_value=self.languages
+        )
+        self.language_patch.start()
         managed_ocr._CONNECTION = None
         managed_ocr._GPU_NAME = None
 
     def tearDown(self):
+        self.language_patch.stop()
         managed_ocr._CONNECTION, managed_ocr._GPU_NAME = self.previous
         self.temp.cleanup()
 
@@ -29,7 +35,10 @@ class ManagedBackendTests(unittest.TestCase):
             patch.object(
                 managed_ocr,
                 "command",
-                return_value=SimpleNamespace(returncode=0, stdout=managed_ocr.IMAGE + " true"),
+                return_value=SimpleNamespace(
+                    returncode=0,
+                    stdout=managed_ocr.image_for_languages(self.languages) + " true",
+                ),
             ),
             patch.object(managed_ocr, "wait_ready", return_value={"accelerated": True}),
             patch.object(managed_ocr, "build_image") as build,
@@ -63,6 +72,7 @@ class ManagedBackendTests(unittest.TestCase):
             "README.md",
             "LICENSE",
             "THIRD_PARTY.md",
+            "build_models.py",
         ):
             (source / name).write_text("source")
         (source / "licenses").mkdir()
@@ -91,9 +101,45 @@ class ManagedBackendTests(unittest.TestCase):
         self.assertIn("server/cts_ocr_server/example.py", observed)
         self.assertIn("server/LICENSE", observed)
         self.assertIn("server/licenses/Apache-2.0.txt", observed)
-        self.assertIn("circle_to_search/models.py", observed)
-        self.assertIn("circle_to_search/tessdata/models.json", observed)
+        self.assertIn("server/build_models.py", observed)
         self.assertFalse(any(name.endswith((".env", ".png", ".traineddata")) for name in observed))
+
+    def test_language_selection_changes_the_local_image(self):
+        self.assertNotEqual(
+            managed_ocr.image_for_languages(("eng", "pol")),
+            managed_ocr.image_for_languages(("eng", "ukr")),
+        )
+        self.assertEqual(
+            managed_ocr.image_for_languages(("eng", "pol")),
+            managed_ocr.image_for_languages(("pol", "eng")),
+        )
+
+    def test_failed_model_switch_restores_the_previous_container_and_token(self):
+        token = self.root / "ocr-server.env"
+        token.write_text("CTS_OCR_SERVER_TOKEN=old-token\nCTS_OCR_PORT=8766\n")
+
+        def docker(arguments, **kwargs):
+            output = ""
+            if arguments[1:3] == ["container", "inspect"]:
+                output = "circle-to-search-ocr:0.13.0 true"
+            elif arguments[-1] == "--list-devices":
+                output = "0 AMD test GPU"
+            return SimpleNamespace(returncode=0, stdout=output)
+
+        with (
+            patch.object(managed_ocr, "settings_path", return_value=self.root / "ocr.json"),
+            patch.object(managed_ocr, "command", side_effect=docker) as command,
+            patch.object(managed_ocr, "wait_ready", side_effect=RuntimeError("startup failed")),
+            patch.object(managed_ocr.Path, "glob") as nodes,
+        ):
+            nodes.return_value = [SimpleNamespace(stat=lambda: SimpleNamespace(st_gid=123))]
+            with self.assertRaisesRegex(RuntimeError, "startup failed"):
+                managed_ocr.ensure_local(OcrConfig("gpu"), setup=True)
+        commands = [call.args[0] for call in command.call_args_list]
+        backup = next(args[-1] for args in commands if args[1:3] == ["rename", managed_ocr.NAME])
+        self.assertIn(["docker", "rename", backup, managed_ocr.NAME], commands)
+        self.assertIn(["docker", "start", managed_ocr.NAME], commands)
+        self.assertIn("CTS_OCR_SERVER_TOKEN=old-token", token.read_text())
 
     def test_local_modes_do_not_require_a_valid_unused_remote_address(self):
         self.assertEqual(OcrConfig("gpu", server_url="unfinished").validated().backend, "gpu")

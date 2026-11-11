@@ -258,7 +258,7 @@ class OcrModelsDialog(QDialog):
         self.backend.setEnabled(False)
         if self.config.backend == "gpu":
             self.status.setText(tr("Preparing local text recognition…"))
-            self.task = Task(get_backend().prepare_local_ocr, self.config)
+            self.task = Task(get_backend().prepare_local_ocr, self.config, self.codes)
         elif self.config.backend == "server":
             self.status.setText(tr("Checking server connection…"))
             self.task = Task(check_server, self.config)

@@ -11,10 +11,11 @@ from cts_ocr_server.engine import (
     NcnnEngine,
     compatible_parameters,
     ctc_runs,
+    merge_line_quads,
     validate_probabilities,
 )
+from cts_ocr_server.gpu_models import GROUPS, LANGUAGES, recognizer_groups
 from cts_ocr_server.service import InferenceWorker, create_app
-from cts_ocr_server.tesseract import TesseractEngine
 from fastapi.testclient import TestClient
 from PIL import Image, ImageDraw, ImageFont
 
@@ -26,8 +27,10 @@ class FakeEngine:
     precision = "fp32"
     self_test_passed = True
     detector_scale = 2.0
+    languages = GROUPS["base"]
+    profile = "standalone"
 
-    def recognize(self, image, vertical=False, on_yield=None):
+    def recognize(self, image, vertical=False, on_yield=None, language=None):
         return [{"text": "語", "bbox": [2, 3, 10, 12], "line": "0", "word": "0", "confidence": 99}]
 
 
@@ -37,24 +40,28 @@ def png():
     return buffer.getvalue()
 
 
-@unittest.skipUnless(os.environ.get("CTS_OCR_TESSDATA"), "requires bundled Tesseract models")
+@unittest.skipUnless(os.environ.get("CTS_OCR_MODELS"), "requires bundled GPU models")
 class BundledModelTests(unittest.TestCase):
     def test_bundled_models_are_advertised_and_return_real_character_boxes(self):
-        directory = Path(os.environ["CTS_OCR_TESSDATA"])
-        manifest = json.loads((directory / "models.json").read_text())
-        engine = TesseractEngine(directory)
+        directory = Path(os.environ["CTS_OCR_MODELS"])
+        manifest = json.loads((directory / "bundle.json").read_text())
+        engine = NcnnEngine(directory, device="cpu")
+        engine.self_test()
         headers = {"Content-Type": "image/png"}
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 44)
-        with TestClient(create_app(FakeEngine(), tesseract=engine)) as client:
+        with TestClient(create_app(engine)) as client:
             health = client.get("/v1/health").json()
-            self.assertEqual(
-                set(health["languages"]), {entry["name"] for entry in manifest["models"]}
-            )
+            self.assertEqual(set(health["languages"]), set(manifest["languages"]))
             for language, expected in (
                 ("pol+eng", "Zażółć gęślą jaźń"),
                 ("ukr", "Українська мова"),
                 ("rus", "Привет, мир!"),
+                ("bul", "Български език"),
+                ("srp", "Српски језик"),
+                ("ell", "Καλημέρα"),
             ):
+                if not set(language.split("+")) <= set(engine.languages):
+                    continue
                 with self.subTest(language=language):
                     image = Image.new("RGB", (680, 110), "white")
                     ImageDraw.Draw(image).text((20, 20), expected, font=font, fill="black")
@@ -68,7 +75,7 @@ class BundledModelTests(unittest.TestCase):
                     )
                     self.assertEqual(response.status_code, 200, response.text)
                     result = response.json()
-                    self.assertEqual(result["engine"], "tesseract")
+                    self.assertEqual(result["engine"], "ppocrv5-ncnn")
                     self.assertFalse(result["accelerated"])
                     self.assertEqual((result["width"], result["height"]), image.size)
                     words = {}
@@ -79,6 +86,15 @@ class BundledModelTests(unittest.TestCase):
                         word = glyph["word"]
                         words[word] = words.get(word, "") + glyph["text"]
                     self.assertEqual(" ".join(words.values()), expected)
+            if manifest["profile"] == "local":
+                self.assertEqual(
+                    {path.name for path in directory.glob("*.bin")},
+                    {"PP_OCRv5_mobile_det.ncnn.bin"}
+                    | {
+                        "PP_OCRv5_mobile_rec.ncnn.bin" if group == "base" else group + ".ncnn.bin"
+                        for group in manifest["recognizers"]
+                    },
+                )
 
 
 class ServiceTests(unittest.TestCase):
@@ -146,7 +162,7 @@ class QueueTests(unittest.TestCase):
         order = []
 
         class Engine(FakeEngine):
-            def recognize(self, image, vertical=False, on_yield=None):
+            def recognize(self, image, vertical=False, on_yield=None, language=None):
                 if not order:
                     started.set()
                     release.wait(3)
@@ -173,7 +189,7 @@ class QueueTests(unittest.TestCase):
         order = []
 
         class Engine(FakeEngine):
-            def recognize(self, image, vertical=False, on_yield=None):
+            def recognize(self, image, vertical=False, on_yield=None, language=None):
                 if image.width == 1:
                     order.append("background-start")
                     started.set()
@@ -199,6 +215,19 @@ class QueueTests(unittest.TestCase):
 
 
 class GeometryTests(unittest.TestCase):
+    def test_language_groups_share_models_and_english_uses_the_selected_recognizer(self):
+        self.assertEqual(recognizer_groups(("eng", "pol", "deu")), ("latin",))
+        self.assertEqual(recognizer_groups(("eng",), ("cyrillic",)), ("cyrillic",))
+        self.assertEqual(set(recognizer_groups(LANGUAGES)), set(GROUPS))
+
+    def test_adjacent_word_crops_merge_without_joining_separate_lines(self):
+        left = np.array([[10, 10], [100, 10], [100, 50], [10, 50]], dtype=np.float32)
+        right = left + [85, 0]
+        below = left + [0, 80]
+        merged = merge_line_quads([below, right, left])
+        self.assertEqual(len(merged), 2)
+        self.assertTrue(any(np.allclose(quad.max(axis=0), [185, 50]) for quad in merged))
+
     def test_detector_scale_rejects_invalid_values_before_loading_models(self):
         for scale in (0, 0.9, 2.1, float("nan"), float("inf")):
             with self.subTest(scale=scale), self.assertRaisesRegex(ValueError, "Detector scale"):

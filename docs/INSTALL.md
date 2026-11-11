@@ -8,7 +8,7 @@ Run the small Windows Setup executable from [GitHub Releases](https://github.com
 
 ## Arch Linux
 
-You can use the small **Linux KDE Setup** download from [GitHub Releases](https://github.com/szynszyling/CtS/releases). Install the dependencies listed below, then run `python3 CtS-0.15.1-linux-kde-setup.pyz` from your download folder. Setup fetches and verifies the OCR models and registers the Plasma shortcut. To choose the models at install time, add `--models eng pol ukr` with the language codes you want. Run Setup with `--help` to see all codes.
+You can use the small **Linux KDE Setup** download from [GitHub Releases](https://github.com/szynszyling/CtS/releases). Install the dependencies listed below, then run `python3 CtS-0.16.0-linux-kde-setup.pyz` from your download folder. Setup fetches and verifies the OCR models and registers the Plasma shortcut. To choose the models at install time, add `--models eng pol ukr` with the language codes you want. Run Setup with `--help` to see all codes.
 
 1. Download this repository using **Code → Download ZIP**, or clone it if you use Git.
 2. Extract it and open a terminal in the project folder.
@@ -44,7 +44,7 @@ python3 install.py
 
 Close an already-open CtS overlay and launch it again. The installer refreshes the app’s code and icons, removes obsolete Python modules, and keeps your saved settings, server token, browser session and existing shortcut.
 
-To upgrade an existing managed Linux GPU container, open **⋮ → Text recognition → Local GPU → Set up / check local GPU**. The new image includes all 19 language packs. English, Japanese and Chinese can use the GPU, and requests with additional languages run on the container’s CPU.
+To upgrade an existing managed Linux GPU container, open **⋮ → Text recognition → Local GPU → Set up / check local GPU**. Then choose your languages under **⋮ → OCR languages…**. CtS builds a local Docker image containing only the recognizers needed for that selection. Every selected language uses Vulkan. Some languages share one recognizer, so choosing Polish and German downloads a shared multilingual model once. Changing your selection may take a few minutes while CtS prepares the new image.
 
 ## Troubleshooting
 

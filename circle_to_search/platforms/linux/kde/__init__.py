@@ -32,7 +32,7 @@ class KdeBackend:
 
         return ensure_local(config)
 
-    def prepare_local_ocr(self, config):
+    def prepare_local_ocr(self, config, languages=None):
         from ..ocr import prepare_local
 
-        return prepare_local(config)
+        return prepare_local(config, languages)

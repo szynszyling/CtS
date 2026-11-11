@@ -46,6 +46,7 @@ jobs:
       - name: Native Windows OCR engine (CPU reference)
         run: python -m circle_to_search.platforms.windows.ocr_worker --device cpu --self-test --model-dir build/ocr-models
   backend-container:
+    if: github.ref_type != 'tag' || startsWith(github.ref, 'refs/tags/ocr-v')
     needs: desktop
     runs-on: ubuntu-24.04
     permissions:
@@ -73,6 +74,8 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'],'a') as output:
               output.write(f'image={image}\nversion={version}\n')
       - run: docker build --target test -f server/Dockerfile -t cts-ocr:test .
+      - name: Check selected-model local profile
+        run: docker build --target test --build-arg OCR_PROFILE=local --build-arg OCR_LANGUAGES=eng+pol -f server/Dockerfile -t cts-ocr:local-test .
       - name: Build the release image
         env:
           VERSION: ${{ steps.image.outputs.version }}

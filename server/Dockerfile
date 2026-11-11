@@ -1,11 +1,13 @@
 # syntax=docker/dockerfile:1
 FROM python:3.12-slim-bookworm AS language-models
 
-WORKDIR /models
-COPY circle_to_search/__init__.py circle_to_search/models.py ./circle_to_search/
-COPY circle_to_search/tessdata/models.json ./circle_to_search/tessdata/
-RUN python -c 'from circle_to_search.models import fetch_models, model_manifest; fetch_models("/opt/cts-tessdata", [entry["name"] for entry in model_manifest()["models"]])' \
-    && chmod -R a=rX /opt/cts-tessdata
+WORKDIR /build
+COPY server/cts_ocr_server/__init__.py server/cts_ocr_server/engine.py server/cts_ocr_server/gpu_models.py server/cts_ocr_server/models.json ./cts_ocr_server/
+COPY server/build_models.py ./
+ARG OCR_PROFILE=server
+ARG OCR_LANGUAGES=
+RUN python build_models.py /opt/cts-models --profile "$OCR_PROFILE" --languages "$OCR_LANGUAGES" \
+    && chmod -R a=rX /opt/cts-models
 
 FROM python:3.12-slim-bookworm AS runtime
 
@@ -13,11 +15,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     XDG_CACHE_HOME=/tmp/cts-cache \
-    CTS_OCR_MODELS=/opt/cts-models \
-    CTS_OCR_TESSDATA=/opt/cts-tessdata
+    CTS_OCR_MODELS=/opt/cts-models
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libvulkan1 mesa-vulkan-drivers libgomp1 tesseract-ocr \
+    && apt-get install -y --no-install-recommends libvulkan1 mesa-vulkan-drivers libgomp1 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 cts \
     && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin cts
@@ -28,11 +29,8 @@ RUN python -m pip install --no-cache-dir --require-hashes -r /tmp/requirements.l
 COPY server/pyproject.toml server/LICENSE server/THIRD_PARTY.md server/README.md ./
 COPY server/licenses ./licenses
 COPY server/cts_ocr_server ./cts_ocr_server
-RUN python -m pip install --no-cache-dir --no-deps . \
-    && python -m cts_ocr_server --download-models --model-dir /opt/cts-models \
-    && chmod -R a=rX /opt/cts-models
-COPY --from=language-models /opt/cts-tessdata /opt/cts-tessdata
-COPY circle_to_search/tessdata/models.json /opt/cts-tessdata/models.json
+RUN python -m pip install --no-cache-dir --no-deps .
+COPY --from=language-models /opt/cts-models /opt/cts-models
 
 USER 10001:10001
 EXPOSE 8766
@@ -46,7 +44,7 @@ FROM runtime AS test
 USER root
 RUN python -m pip install --no-cache-dir httpx==0.28.1 \
     && apt-get update \
-    && apt-get install -y --no-install-recommends fonts-dejavu-core \
+    && apt-get install -y --no-install-recommends fonts-dejavu-core fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
 COPY server/tests /opt/tests
 USER 10001:10001
@@ -54,11 +52,11 @@ RUN python -m unittest discover -s /opt/tests -q
 RUN cts-ocr-server --device cpu --self-test
 
 FROM runtime AS final
-ARG VERSION=0.13.0
+ARG VERSION=0.14.0
 ARG VCS_REF=unknown
 LABEL org.opencontainers.image.title="CtS OCR backend" \
     org.opencontainers.image.licenses="MIT" \
-    org.opencontainers.image.description="Self-hosted character recognition for Circle to Search with Vulkan inference and 19 Tesseract language packs" \
+    org.opencontainers.image.description="Vulkan-accelerated multilingual character recognition for Circle to Search" \
     org.opencontainers.image.source="https://github.com/szynszyling/CtS" \
     org.opencontainers.image.documentation="https://github.com/szynszyling/CtS/blob/main/server/README.md" \
     org.opencontainers.image.version="${VERSION}" \

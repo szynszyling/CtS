@@ -12,25 +12,29 @@ import re
 import urllib.request
 from pathlib import Path
 
+from .gpu_models import GROUPS, recognizer_groups
 
-def fetch_models(directory):
+
+def verified_download(target, url, sha256):
+    if target.is_file() and hashlib.sha256(target.read_bytes()).hexdigest() == sha256:
+        return
+    request = urllib.request.Request(url, headers={"User-Agent": "CircleToSearch-OCR"})
+    with urllib.request.urlopen(request, timeout=60) as response:
+        data = response.read(128 * 1024 * 1024)
+    if hashlib.sha256(data).hexdigest() != sha256:
+        raise RuntimeError("Model checksum failed: " + target.name)
+    temporary = target.with_suffix(target.suffix + ".tmp")
+    temporary.write_bytes(data)
+    temporary.replace(target)
+
+
+def fetch_models(directory, *, detector_only=False):
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     manifest = json.loads(Path(__file__).with_name("models.json").read_text())
     for name, entry in manifest.items():
-        target = directory / name
-        if target.is_file() and hashlib.sha256(target.read_bytes()).hexdigest() == entry["sha256"]:
-            continue
-        request = urllib.request.Request(
-            entry["url"], headers={"User-Agent": "CircleToSearch-OCR/0.12"}
-        )
-        with urllib.request.urlopen(request, timeout=60) as response:
-            data = response.read(128 * 1024 * 1024)
-        if hashlib.sha256(data).hexdigest() != entry["sha256"]:
-            raise RuntimeError("Model checksum failed: " + name)
-        temporary = target.with_suffix(target.suffix + ".tmp")
-        temporary.write_bytes(data)
-        temporary.replace(target)
+        if not detector_only or "_det." in name:
+            verified_download(directory / name, entry["url"], entry["sha256"])
     return directory
 
 
@@ -157,6 +161,36 @@ def order_quad(points):
     return np.roll(points, -int(np.argmin(points.sum(axis=1))), axis=0).astype(np.float32)
 
 
+def merge_line_quads(quads):
+    """Join adjacent word detections before their expanded crops overlap."""
+    import cv2
+    import numpy as np
+
+    merged = []
+    for quad in sorted(quads, key=lambda q: float(q[:, 0].min())):
+        left, top = quad.min(axis=0)
+        right, bottom = quad.max(axis=0)
+        for index, other in enumerate(merged):
+            x1, y1 = other.min(axis=0)
+            x2, y2 = other.max(axis=0)
+            height = min(bottom - top, y2 - y1)
+            gap = max(left - x2, x1 - right, 0)
+            overlap = min(bottom, y2) - max(top, y1)
+            if (
+                height > 0
+                and bottom - top < (right - left) * 1.5
+                and y2 - y1 < (x2 - x1) * 1.5
+                and overlap > height * 0.7
+                and gap < height * 0.4
+            ):
+                points = np.vstack((quad, other)).astype(np.float32)
+                merged[index] = order_quad(cv2.boxPoints(cv2.minAreaRect(points)))
+                break
+        else:
+            merged.append(quad)
+    return merged
+
+
 class NcnnEngine:
     def __init__(self, model_dir, device="vulkan", gpu_index=0, detector_scale=2.0):
         if not math.isfinite(detector_scale) or not 1 <= detector_scale <= 2:
@@ -186,10 +220,28 @@ class NcnnEngine:
                 raise RuntimeError("A software Vulkan renderer cannot be used as GPU acceleration.")
         else:
             self.device_name = "CPU (explicit development mode)"
-        model_dir = fetch_models(model_dir)
-        self.characters = [""] + dictionary(model_dir / "ppocrv5_dict.h") + [" "]
+        model_dir = Path(model_dir)
+        bundle_path = model_dir / "bundle.json"
+        if bundle_path.is_file():
+            bundle = json.loads(bundle_path.read_text())
+            self.languages = tuple(bundle["languages"])
+            self.profile = bundle["profile"]
+            groups = bundle["recognizers"]
+        else:
+            fetch_models(model_dir)
+            self.languages = GROUPS["base"]
+            self.profile = "standalone"
+            groups = ["base"]
         self.detector = self.load_net(model_dir, "det")
-        self.recognizer = self.load_net(model_dir, "rec")
+        self.recognizers = {}
+        for group in groups:
+            if group == "base":
+                tokens = dictionary(model_dir / "ppocrv5_dict.h")
+                model = self.load_net(model_dir, "rec")
+            else:
+                tokens = (model_dir / f"{group}.txt").read_text(encoding="utf-8").splitlines()
+                model = self.load_net(model_dir, group)
+            self.recognizers[group] = (model, ["", *tokens, " "])
 
     def load_net(self, directory, task):
         net = self.ncnn.Net()
@@ -207,7 +259,8 @@ class NcnnEngine:
         net.opt.use_int8_arithmetic = False
         if self.device == "vulkan":
             net.set_vulkan_device(self.gpu_index)
-        prefix = directory / ("PP_OCRv5_mobile_" + task + ".ncnn")
+        name = "PP_OCRv5_mobile_" + task if task in ("det", "rec") else task
+        prefix = directory / (name + ".ncnn")
         parameters = compatible_parameters(Path(str(prefix) + ".param").read_text())
         if net.load_param_mem(parameters) or net.load_model(str(prefix) + ".bin"):
             raise RuntimeError("Could not load the " + task + " model.")
@@ -320,7 +373,7 @@ class NcnnEngine:
             result.append(order_quad(box))
         return result
 
-    def recognize_line(self, image, quad, line_id):
+    def recognize_line(self, image, quad, line_id, groups):
         import cv2
         import numpy as np
 
@@ -338,19 +391,30 @@ class NcnnEngine:
         crop = cv2.warpPerspective(
             image, transform, (crop_width, 48), borderMode=cv2.BORDER_REPLICATE
         )
-        probabilities = self.infer(self.recognizer, crop, [127.5] * 3, [1 / 127.5] * 3).squeeze()
-        if probabilities.ndim != 2 or probabilities.shape[1] != len(self.characters):
-            raise RuntimeError(
-                f"Recognizer/dictionary mismatch: {probabilities.shape}, {len(self.characters)} characters."
-            )
-        runs = ctc_runs(probabilities)
-        if not runs or sum(run[3] for run in runs) / len(runs) < 0.5:
+        best = None
+        best_confidence = 0.5
+        for group in groups:
+            model, characters = self.recognizers[group]
+            probabilities = self.infer(model, crop, [127.5] * 3, [1 / 127.5] * 3)
+            probabilities = probabilities.reshape(-1, probabilities.shape[-1])
+            if probabilities.shape[1] != len(characters):
+                raise RuntimeError(
+                    f"{group} recognizer/dictionary mismatch: "
+                    f"{probabilities.shape}, {len(characters)} characters."
+                )
+            runs = ctc_runs(probabilities)
+            if runs:
+                confidence = sum(run[3] for run in runs) / len(runs)
+                if confidence > best_confidence:
+                    best = (characters, runs, probabilities.shape[0])
+                    best_confidence = confidence
+        if best is None:
             return []
-        steps = probabilities.shape[0]
+        characters, runs, steps = best
         glyphs = []
         word = 0
         for i, (token, start, end, score) in enumerate(runs):
-            text = self.characters[token]
+            text = characters[token]
             if text.isspace():
                 word += 1
                 continue
@@ -387,14 +451,21 @@ class NcnnEngine:
             )
         return glyphs
 
-    def recognize(self, image, vertical=False, on_yield=None):
+    def recognize(self, image, vertical=False, on_yield=None, language=None):
         import cv2
         import numpy as np
 
         pixels = cv2.cvtColor(np.asarray(image.convert("RGB")), cv2.COLOR_RGB2BGR)
+        groups = (
+            recognizer_groups(language.split("+"), self.recognizers)
+            if language
+            else tuple(self.recognizers)
+        )
         if on_yield:
             on_yield()
         quads = self.detect(pixels)
+        if not vertical:
+            quads = merge_line_quads(quads)
         quads.sort(
             key=(lambda q: (-float(q[:, 0].mean()), float(q[:, 1].min())))
             if vertical
@@ -404,5 +475,5 @@ class NcnnEngine:
         for index, quad in enumerate(quads):
             if on_yield:
                 on_yield()
-            glyphs.extend(self.recognize_line(pixels, quad, index))
+            glyphs.extend(self.recognize_line(pixels, quad, index, groups))
         return glyphs

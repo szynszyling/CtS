@@ -7,7 +7,7 @@ The PP-OCRv5 ncnn models and dictionary are fetched from [nihui/ncnn-android-ppo
 
 A copy of the [Apache 2.0 license](licenses/Apache-2.0.txt) accompanies the models.
 
-The Tesseract packs come from [tessdata_best](https://github.com/tesseract-ocr/tessdata_best) under Apache 2.0. The shared `circle_to_search/tessdata/models.json` manifest records the pinned revision and file digests.
+Additional recognition models and dictionaries come from [RapidOCR’s versioned model distribution](https://github.com/RapidAI/RapidOCR/blob/main/python/rapidocr/default_models.yaml) and originate in [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR). RapidOCR and PaddleOCR use Apache 2.0. The Docker build converts these models using Tencent’s BSD-3-Clause [pnnx](https://github.com/Tencent/ncnn/tree/master/tools/pnnx). URLs, source revision tags and SHA-256 digests are recorded in `build_models.py`.
 
 The detector preprocessing and postprocessing were adapted from Tencent's [ncnn PP-OCRv5 example](https://github.com/Tencent/ncnn/blob/master/examples/ppocrv5.cpp), copyright 2025 Tencent, SPDX BSD-3-Clause. The ncnn dictionary header retains its upstream license notice. Character decoding/coordinate conversion and the HTTP/client integration are implemented for CtS.
 
