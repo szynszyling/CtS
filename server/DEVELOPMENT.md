@@ -4,7 +4,7 @@ The service is independent of Qt and the desktop platform adapters. It uses PP-O
 
 ## Models and inference
 
-`cts_ocr_server/models.json` pins the upstream revision and SHA-256 digest of every model file. Docker downloads/verifies them at build time; the image can recognize text offline. Sources and licenses are listed in [THIRD_PARTY.md](THIRD_PARTY.md).
+`cts_ocr_server/models.json` pins the PP-OCRv5 files. The Docker build also verifies and bundles every Tesseract model from the shared desktop manifest. Requests that include languages outside the PP-OCRv5 set use Tesseract with the requested models on the server CPU. Both paths work offline and return the same character-box format. Sources and licenses are listed in [THIRD_PARTY.md](THIRD_PARTY.md).
 
 Both networks use FP32 storage/arithmetic. Reduced precision produced corrupt results on the tested Intel HD 630; keep FP32 unless a separately tested implementation replaces it. Non-finite or invalid probability distributions are rejected before decoding. A startup test recognizes two known text images and checks a blank image before the API becomes ready.
 
@@ -32,11 +32,11 @@ Production users copy only the root `compose.yaml`. The `server/compose*.yaml` f
 ```sh
 docker build --target test -f server/Dockerfile -t circle-to-search-ocr:test .
 docker compose --env-file server/.env -f server/compose.yaml -f server/compose.build.yaml build
-python3 tools/smoke/ocr_server.py --docker circle-to-search-ocr:0.12.4 --gpu-name AMD
-python3 tools/smoke/ocr_server.py --docker circle-to-search-ocr:0.12.4 --device cpu
-python3 tools/smoke/ocr_server.py --docker circle-to-search-ocr:0.12.4 --gpu-name AMD --detector-scale 1.5
-python3 tools/smoke/ocr_https.py --image circle-to-search-ocr:0.12.4
-python3 tools/smoke/compose.py --image circle-to-search-ocr:0.12.4
+python3 tools/smoke/ocr_server.py --docker circle-to-search-ocr:0.13.0 --gpu-name AMD
+python3 tools/smoke/ocr_server.py --docker circle-to-search-ocr:0.13.0 --device cpu
+python3 tools/smoke/ocr_server.py --docker circle-to-search-ocr:0.13.0 --gpu-name AMD --detector-scale 1.5
+python3 tools/smoke/ocr_https.py --image circle-to-search-ocr:0.13.0
+python3 tools/smoke/compose.py --image circle-to-search-ocr:0.13.0
 ```
 
 The tests use generated text, including 14px light/dark Japanese and vertical character selection. The HTTPS check uses an isolated Docker network, the exact SWAG virtual host, a temporary trusted test certificate and a CPU reference backend. It checks bearer forwarding, rejection of an invalid token, upload limits and rejection of an untrusted TLS certificate. It does not change a working SWAG container or desktop configuration.
@@ -49,7 +49,7 @@ Measure the actual device, fonts, image sizes and transport before changing defa
 
 ## Publish a public release
 
-Update the server version in `pyproject.toml`, `cts_ocr_server/__init__.py`, Docker/image defaults and documentation, then commit and push. Create a matching tag such as `ocr-v0.12.4`.
+Update the server version in `pyproject.toml`, `cts_ocr_server/__init__.py`, Docker/image defaults and documentation, then commit and push. Create a matching tag such as `ocr-v0.13.0`.
 
 The release workflow gates publishing on desktop/backend tests, model self-tests and real HTTPS/OCR integration. It tags the exact tested image and publishes version, source-commit and `latest` tags to GHCR using the repository’s temporary `GITHUB_TOKEN`, then pulls it back. OCI labels identify its source, version and revision.
 

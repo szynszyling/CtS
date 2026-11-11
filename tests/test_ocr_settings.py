@@ -1,10 +1,11 @@
 import unittest
 from unittest.mock import patch
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from circle_to_search.ocr_backend import OcrConfig, configure_ocr, current_config
-from circle_to_search.ocr_settings import OcrSettingsDialog
+from circle_to_search.ocr_settings import OcrModelsDialog, OcrSettingsDialog
 
 APP = QApplication.instance() or QApplication([])
 
@@ -66,6 +67,24 @@ class SettingsTests(unittest.TestCase):
             APP.processEvents()
             save.assert_not_called()
         self.assertEqual(current_config().backend, "local")
+
+    def test_selecting_a_server_language_preserves_backend_without_downloading(self):
+        config = OcrConfig(backend="server")
+        configure_ocr(config)
+        picker = OcrModelsDialog()
+        for i in range(picker.backend.count()):
+            item = picker.backend.item(i)
+            item.setCheckState(Qt.Checked if item.data(Qt.UserRole) == "pol" else Qt.Unchecked)
+        with (
+            patch("circle_to_search.ocr_settings.QThreadPool") as pool,
+            patch("circle_to_search.ocr_settings.set_selected_models") as save,
+        ):
+            picker.download()
+            task = pool.globalInstance.return_value.start.call_args.args[0]
+            task.signals.done.emit({"languages": ["pol"]})
+            APP.processEvents()
+            save.assert_called_once_with(("pol",))
+        self.assertEqual(current_config(), config)
 
 
 if __name__ == "__main__":

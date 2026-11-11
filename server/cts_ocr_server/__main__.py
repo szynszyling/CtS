@@ -32,6 +32,7 @@ def main(argv=None):
         ),
     )
     parser.add_argument("--download-models", action="store_true")
+    parser.add_argument("--tessdata-dir", type=Path, default=os.environ.get("CTS_OCR_TESSDATA"))
     parser.add_argument(
         "--self-test",
         action="store_true",
@@ -89,9 +90,12 @@ def main(argv=None):
     import uvicorn
 
     from .service import create_app
+    from .tesseract import TesseractEngine
+
+    tesseract = TesseractEngine(args.tessdata_dir) if args.tessdata_dir else None
 
     uvicorn.run(
-        create_app(engine, token),
+        create_app(engine, token, tesseract),
         host=args.host,
         port=args.port,
         access_log=False,

@@ -19,45 +19,53 @@ from . import __version__
 MAX_BYTES = 16 * 1024 * 1024
 MAX_PIXELS = 24_000_000
 API_VERSION = 1
+NCNN_LANGUAGES = frozenset({"eng", "jpn", "jpn_vert", "chi_sim", "chi_tra"})
 
 
 class InferenceWorker:
-    def __init__(self, engine):
+    def __init__(self, engine, tesseract=None):
         self.engine = engine
+        self.tesseract = tesseract
         self.queue = PriorityQueue(maxsize=8)
         self.counter = count()
         self.thread = threading.Thread(target=self.run, name="cts-ocr-inference", daemon=True)
         self.thread.start()
 
-    def submit(self, image, vertical, interactive):
+    def submit(self, image, vertical, interactive, language=None):
         future = Future()
         self.queue.put_nowait(
             (
                 0 if interactive else 10,
                 next(self.counter),
-                (future, image, vertical, time.monotonic()),
+                (future, image, vertical, language, time.monotonic()),
             )
         )
         return future
 
     def execute(self, job, interactive):
-        future, image, vertical, submitted = job
+        future, image, vertical, language, submitted = job
         if not future.set_running_or_notify_cancel():
             return
         started = time.monotonic()
         try:
-            glyphs = self.engine.recognize(
-                image, vertical, on_yield=None if interactive else self.interrupt_background
-            )
+            if language is None:
+                glyphs = self.engine.recognize(
+                    image, vertical, on_yield=None if interactive else self.interrupt_background
+                )
+                engine, device = "ppocrv5-ncnn", self.engine.device_name
+                accelerated = self.engine.device == "vulkan"
+            else:
+                glyphs = self.tesseract.recognize(image, language, vertical)
+                engine, device, accelerated = "tesseract", "CPU", False
             result = {
                 "service": "circle-to-search-ocr",
                 "api_version": API_VERSION,
                 "width": image.width,
                 "height": image.height,
                 "glyphs": glyphs,
-                "engine": "ppocrv5-ncnn",
-                "device": self.engine.device_name,
-                "accelerated": self.engine.device == "vulkan",
+                "engine": engine,
+                "device": device,
+                "accelerated": accelerated,
                 "elapsed_ms": round((time.monotonic() - started) * 1000, 2),
                 "queue_ms": round((started - submitted) * 1000, 2),
             }
@@ -105,12 +113,14 @@ class InferenceWorker:
         self.thread.join(timeout=30)
 
 
-def create_app(engine, token=""):
+def create_app(engine, token="", tesseract=None):
     if not engine.self_test_passed:
         raise RuntimeError(
             "The OCR engine must pass its recognition self-test before serving requests."
         )
-    worker = InferenceWorker(engine)
+    tesseract_languages = tesseract.languages if tesseract else frozenset()
+    languages = NCNN_LANGUAGES | tesseract_languages
+    worker = InferenceWorker(engine, tesseract)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -149,7 +159,7 @@ def create_app(engine, token=""):
             "gpu_index": engine.gpu_index,
             "accelerated": engine.device == "vulkan",
             "queued": worker.queue.qsize(),
-            "languages": ["eng", "jpn", "chi_sim", "chi_tra"],
+            "languages": sorted(languages),
             "character_boxes": True,
         }
 
@@ -161,14 +171,13 @@ def create_app(engine, token=""):
         priority: str = "background",
     ):
         authorize(request)
-        if any(
-            part not in ("eng", "jpn", "jpn_vert", "chi_sim", "chi_tra")
-            for part in language.split("+")
-        ):
-            raise HTTPException(
-                422,
-                "This model supports English, Japanese and Chinese. Select local OCR for other language packs.",
-            )
+        codes = set(language.split("+"))
+        use_tesseract = not codes <= NCNN_LANGUAGES
+        supported = tesseract_languages if use_tesseract else NCNN_LANGUAGES
+        if not codes <= supported:
+            raise HTTPException(422, "One or more requested OCR languages are unavailable.")
+        language = "+".join(dict.fromkeys(language.split("+"))) if use_tesseract else None
+        vertical = vertical or codes == {"jpn_vert"}
         if priority not in ("background", "interactive"):
             raise HTTPException(422, "Unknown request priority.")
         if request.headers.get("Content-Type", "").split(";")[0] != "image/png":
@@ -188,7 +197,7 @@ def create_app(engine, token=""):
         except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as error:
             raise HTTPException(400, "The image could not be decoded.") from error
         try:
-            future = worker.submit(image, vertical, priority == "interactive")
+            future = worker.submit(image, vertical, priority == "interactive", language)
         except Full:
             raise HTTPException(503, "The OCR queue is full. Try again shortly.")
         try:

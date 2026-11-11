@@ -2,7 +2,7 @@
 
 Your NAS needs only **[compose.yaml](../compose.yaml)** and the image Docker pulls. No repository clone, Python installation, source build, `.env` file or extra application configuration files are needed.
 
-The image includes the OCR models and runtime dependencies. It supports Linux AMD64 with a Vulkan GPU, including the tested Intel HD 630.
+The image includes all 19 CtS language packs and runs OCR without downloading models at startup. It supports Linux AMD64 with a Vulkan GPU, including the tested Intel HD 630. English, Japanese and Chinese can use the Vulkan engine. Requests that include other languages, such as Polish, Ukrainian or Russian, use Tesseract on the server’s CPU.
 
 ## 1. Save the file 📄
 
@@ -62,6 +62,8 @@ See the [SWAG guide](REMOTE_ACCESS.md) for a copyable Nginx config. If you alrea
 
 In the desktop app, choose **⋮ → Text recognition → Self-hosted CtS server**. Enter your HTTPS address and the OCR token, then check the connection and save.
 
+Open **⋮ → OCR languages…** and select the languages you want recognized. The desktop app checks that the server provides them. Keep the list short for faster recognition. In desktop version 0.15.0, save your language selection first, then switch back to **Self-hosted CtS server**.
+
 ## Updating and checking it
 
 From the same folder:
@@ -71,7 +73,7 @@ docker compose pull
 docker compose up -d
 ```
 
-`latest` points to the most recent tested release. To pin a particular release, change the image line to a version such as `ghcr.io/szynszyling/cts-ocr:0.12.4`.
+`latest` points to the most recent tested release. To pin a particular release, change the image line to a version such as `ghcr.io/szynszyling/cts-ocr:0.13.0`.
 
 Useful commands:
 

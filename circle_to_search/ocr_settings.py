@@ -208,11 +208,15 @@ class OcrModelsDialog(QDialog):
         super().__init__(parent)
         self.cancelled = False
         self.setWindowTitle(tr("OCR languages"))
+        self.config = current_config()
+        remote = self.config.backend == "server"
         self.setStyleSheet("QDialog {background:" + current_theme().background + ";}")
         layout = QVBoxLayout(self)
         description = QLabel(
             tr(
-                "Choose the languages to recognize with local Tesseract. Only missing selected models are downloaded."
+                "Choose the languages to use on your OCR server."
+                if remote
+                else "Choose the languages to recognize with local Tesseract. Only missing selected models are downloaded."
             )
         )
         description.setWordWrap(True)
@@ -227,12 +231,18 @@ class OcrModelsDialog(QDialog):
             item.setCheckState(Qt.Checked if code in selected else Qt.Unchecked)
             self.backend.addItem(item)
         layout.addWidget(self.backend)
-        self.status = QLabel(tr("Selecting models switches OCR to local Tesseract (CPU)."))
+        self.status = QLabel(
+            tr("The server supplies these models.")
+            if remote
+            else tr("Selecting models switches OCR to local Tesseract (CPU).")
+        )
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
         buttons = QDialogButtonBox(QDialogButtonBox.Cancel)
         buttons.button(QDialogButtonBox.Cancel).setText(tr("Cancel"))
-        self.apply = buttons.addButton(tr("Download and use"), QDialogButtonBox.AcceptRole)
+        self.apply = buttons.addButton(
+            tr("Save") if remote else tr("Download and use"), QDialogButtonBox.AcceptRole
+        )
         buttons.accepted.connect(self.download)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -252,20 +262,34 @@ class OcrModelsDialog(QDialog):
             return
         self.apply.setEnabled(False)
         self.backend.setEnabled(False)
-        self.status.setText(tr("Preparing selected OCR models…"))
-        self.task = Task(fetch_models, ocr_model_directory(), self.codes)
+        if self.config.backend == "server":
+            self.status.setText(tr("Checking server connection…"))
+            self.task = Task(check_server, self.config)
+        else:
+            self.status.setText(tr("Preparing selected OCR models…"))
+            self.task = Task(fetch_models, ocr_model_directory(), self.codes)
         self.task.signals.done.connect(self.download_finished)
         self.task.signals.failed.connect(self.download_failed)
         QThreadPool.globalInstance().start(self.task)
 
-    def download_finished(self, _):
+    def download_finished(self, result):
         if self.cancelled:
             return
-        config = replace(current_config(), backend="local")
         try:
-            config.save()
+            if self.config.backend == "server":
+                available = set(result.get("languages", []))
+                if "jpn" in available:
+                    available.add("jpn_vert")
+                missing = set(self.codes) - available
+                if missing:
+                    raise ValueError(
+                        tr("Unavailable on this server:") + " " + ", ".join(sorted(missing))
+                    )
+            else:
+                config = replace(self.config, backend="local")
+                config.save()
+                configure_ocr(config)
             set_selected_models(self.codes)
-            configure_ocr(config)
         except (OSError, ValueError) as error:
             self.download_failed(str(error))
             return

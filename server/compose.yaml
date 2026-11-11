@@ -1,6 +1,6 @@
 services:
   ocr:
-    image: "${CTS_OCR_IMAGE:-ghcr.io/szynszyling/cts-ocr:0.12.4}"
+    image: "${CTS_OCR_IMAGE:-ghcr.io/szynszyling/cts-ocr:0.13.0}"
     restart: unless-stopped
     ports:
       - "${CTS_OCR_BIND:-127.0.0.1}:${CTS_OCR_PORT:-8766}:8766"

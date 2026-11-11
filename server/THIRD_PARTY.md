@@ -7,6 +7,8 @@ The PP-OCRv5 ncnn models and dictionary are fetched from [nihui/ncnn-android-ppo
 
 A copy of the [Apache 2.0 license](licenses/Apache-2.0.txt) accompanies the models.
 
+The Tesseract packs come from [tessdata_best](https://github.com/tesseract-ocr/tessdata_best) under Apache 2.0. The shared `circle_to_search/tessdata/models.json` manifest records the pinned revision and file digests.
+
 The detector preprocessing and postprocessing were adapted from Tencent's [ncnn PP-OCRv5 example](https://github.com/Tencent/ncnn/blob/master/examples/ppocrv5.cpp), copyright 2025 Tencent, SPDX BSD-3-Clause. The ncnn dictionary header retains its upstream license notice. Character decoding/coordinate conversion and the HTTP/client integration are implemented for CtS.
 
 The ncnn BSD-3-Clause notice follows:

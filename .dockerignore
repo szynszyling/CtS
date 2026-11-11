@@ -1,6 +1,11 @@
 **
 !server/
 !server/**
+!circle_to_search/
+!circle_to_search/__init__.py
+!circle_to_search/models.py
+!circle_to_search/tessdata/
+!circle_to_search/tessdata/models.json
 server/**/__pycache__/
 server/**/*.pyc
 server/**/.env*

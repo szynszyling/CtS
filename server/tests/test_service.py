@@ -1,4 +1,6 @@
 import io
+import json
+import os
 import threading
 import unittest
 from pathlib import Path
@@ -12,8 +14,9 @@ from cts_ocr_server.engine import (
     validate_probabilities,
 )
 from cts_ocr_server.service import InferenceWorker, create_app
+from cts_ocr_server.tesseract import TesseractEngine
 from fastapi.testclient import TestClient
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 
 class FakeEngine:
@@ -32,6 +35,50 @@ def png():
     buffer = io.BytesIO()
     Image.new("RGB", (64, 48), "white").save(buffer, format="PNG")
     return buffer.getvalue()
+
+
+@unittest.skipUnless(os.environ.get("CTS_OCR_TESSDATA"), "requires bundled Tesseract models")
+class BundledModelTests(unittest.TestCase):
+    def test_bundled_models_are_advertised_and_return_real_character_boxes(self):
+        directory = Path(os.environ["CTS_OCR_TESSDATA"])
+        manifest = json.loads((directory / "models.json").read_text())
+        engine = TesseractEngine(directory)
+        headers = {"Content-Type": "image/png"}
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 44)
+        with TestClient(create_app(FakeEngine(), tesseract=engine)) as client:
+            health = client.get("/v1/health").json()
+            self.assertEqual(
+                set(health["languages"]), {entry["name"] for entry in manifest["models"]}
+            )
+            for language, expected in (
+                ("pol+eng", "Zażółć gęślą jaźń"),
+                ("ukr", "Українська мова"),
+                ("rus", "Привет, мир!"),
+            ):
+                with self.subTest(language=language):
+                    image = Image.new("RGB", (680, 110), "white")
+                    ImageDraw.Draw(image).text((20, 20), expected, font=font, fill="black")
+                    buffer = io.BytesIO()
+                    image.save(buffer, format="PNG")
+                    response = client.post(
+                        "/v1/ocr",
+                        params={"language": language},
+                        headers=headers,
+                        content=buffer.getvalue(),
+                    )
+                    self.assertEqual(response.status_code, 200, response.text)
+                    result = response.json()
+                    self.assertEqual(result["engine"], "tesseract")
+                    self.assertFalse(result["accelerated"])
+                    self.assertEqual((result["width"], result["height"]), image.size)
+                    words = {}
+                    for glyph in result["glyphs"]:
+                        x, y, width, height = glyph["bbox"]
+                        self.assertTrue(0 <= x < x + width <= image.width)
+                        self.assertTrue(0 <= y < y + height <= image.height)
+                        word = glyph["word"]
+                        words[word] = words.get(word, "") + glyph["text"]
+                    self.assertEqual(" ".join(words.values()), expected)
 
 
 class ServiceTests(unittest.TestCase):
