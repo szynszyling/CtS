@@ -70,6 +70,8 @@ Choose **⋮ → Text recognition → Local GPU** in CtS on Linux, then select y
 
 The published image uses the `server` profile with all recognizers. Server deployment keeps using the single Compose file above. Source-build options are in the [developer guide](DEVELOPMENT.md).
 
+Windows uses a native worker with the same selected recognizers and verified downloader. Choose languages in the desktop app to prepare that worker. The [Windows guide](../packaging/windows/README.md) covers its installer and GPU setup.
+
 ## Updating and checking it
 
 From the same folder:

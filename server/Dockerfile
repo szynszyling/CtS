@@ -2,7 +2,7 @@
 FROM python:3.12-slim-bookworm AS language-models
 
 WORKDIR /build
-COPY server/cts_ocr_server/__init__.py server/cts_ocr_server/engine.py server/cts_ocr_server/gpu_models.py server/cts_ocr_server/models.json ./cts_ocr_server/
+COPY server/cts_ocr_server/__init__.py server/cts_ocr_server/bundle.py server/cts_ocr_server/engine.py server/cts_ocr_server/gpu_models.py server/cts_ocr_server/models.json ./cts_ocr_server/
 COPY server/build_models.py ./
 ARG OCR_PROFILE=server
 ARG OCR_LANGUAGES=

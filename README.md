@@ -31,7 +31,7 @@ Press **Meta + Shift + G** on Plasma or **Win + Shift + G** on Windows, draw aro
 
 *OCR means text recognition: turning the words in a screenshot into selectable text.*
 
-Open **⋮ → Display language** to choose English or Polski. Google Search, Lens and Translate follow that choice. Open **⋮ → OCR languages…** to choose from 19 language packs, including Polish, Ukrainian, Russian, Bulgarian, Serbian Cyrillic, Greek, Japanese, Korean and Chinese. On Linux, local GPU setup downloads and builds only the recognizers your selection needs. The server Docker image includes every recognizer. Both Docker modes use Vulkan for all supported languages.
+Open **⋮ → Display language** to choose English or Polski. Google Search, Lens and Translate follow that choice. Open **⋮ → OCR languages…** to choose from 19 language packs, including Polish, Ukrainian, Russian, Bulgarian, Serbian Cyrillic, Greek, Japanese, Korean and Chinese. Windows and Linux local GPU setup download only the recognizers your selection needs. The server Docker image includes every recognizer. All supported languages can use Vulkan.
 
 ## Supported systems 🖥️
 

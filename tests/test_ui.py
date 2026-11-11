@@ -36,6 +36,7 @@ class FakeBrowser(QWidget):
 
 class DelayedBrowser(FakeBrowser):
     loadStarted = Signal()
+    probeQueued = Signal()
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -47,6 +48,7 @@ class DelayedBrowser(FakeBrowser):
 
     def runJavaScript(self, script, callback):
         self.probes.append(callback)
+        self.probeQueued.emit()
 
 
 def english_document():
@@ -687,8 +689,9 @@ class OverlayTests(unittest.TestCase):
         browser = sheet.browser
         browser.loadFinished.emit(True)
         self.assertIs(sheet.content.currentWidget(), sheet.message_page)
+        retried = QSignalSpy(browser.probeQueued)
         browser.probes.pop()(False)
-        QTest.qWait(70)
+        self.assertTrue(retried.wait(1000))
         self.assertIs(sheet.content.currentWidget(), sheet.message_page)
         revealed = QSignalSpy(sheet.content.currentChanged)
         browser.probes.pop()(True)

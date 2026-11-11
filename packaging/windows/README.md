@@ -10,11 +10,13 @@ Press **Win + Shift + G** to open the selection overlay. After you close it, CtS
 
 ## Text recognition ⚡
 
-- **Local GPU** runs the Vulkan OCR worker on Windows without Docker. The bundle includes the models. Use the GPU name field to select a particular device, such as `AMD` or `NVIDIA`.
+- **Local GPU** runs a native Vulkan OCR worker. Choose your languages under **⋮ → OCR languages…**. CtS downloads and prepares only the recognizers needed for those languages, including Polish, Cyrillic, Greek and Korean. Some languages share a recognizer. The first setup needs an internet connection and may take a few minutes. Use the GPU name field to select a device such as `AMD` or `NVIDIA`.
 - **Local Tesseract** uses the CPU. Install Tesseract for Windows separately, for example with `scoop install tesseract`. The app includes the English and Japanese language data. It can find Tesseract on `PATH` or in common install locations.
 - **Self-hosted server** connects to the same CtS OCR Docker server used by the Linux desktop app.
 
 Select a backend under **⋮ → Text recognition**. Automatic appearance follows the Windows app theme. Protected video, the lock screen and the secure desktop may not be captured.
+
+GPU model files are cached under `%LOCALAPPDATA%\CircleToSearch\ocr\models`. CtS verifies cached files before reusing them. Changing languages restarts the native worker with the selected recognizers. Open **⋮ → Display language** to choose English or Polski and set the language used by Google.
 
 ## Updating and uninstalling
 
@@ -48,5 +50,5 @@ Run `python install.py` for a per-user source install, `python install.py --star
 With Inno Setup 6.7.4 or later, build the small Setup executable against the exact ZIP uploaded to the matching GitHub release:
 
 ```powershell
-python packaging/windows/build_setup.py dist/CtS-0.14.1-windows-x64.zip --compiler 'C:\Path\To\ISCC.exe'
+python packaging/windows/build_setup.py dist/CtS-0.17.0-windows-x64.zip --compiler 'C:\Path\To\ISCC.exe'
 ```

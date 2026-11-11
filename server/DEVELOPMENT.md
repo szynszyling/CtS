@@ -4,7 +4,7 @@ The service is independent of Qt and the desktop platform adapters. It uses ncnn
 
 ## Models and inference
 
-`cts_ocr_server/models.json` pins the original PP-OCRv5 detector and CJK recognizer. `build_models.py` pins the RapidOCR ONNX exports, dictionaries and pnnx converter by SHA-256. It converts the multilingual PP-OCRv6 small model for Latin languages and PP-OCRv5 recognizers for Cyrillic, Greek and Korean to ncnn FP32. Sources and licenses are listed in [THIRD_PARTY.md](THIRD_PARTY.md).
+`cts_ocr_server/models.json` pins the original PP-OCRv5 detector and CJK recognizer. The shared `cts_ocr_server/bundle.py` downloader pins the RapidOCR ONNX exports, dictionaries and Linux/Windows pnnx converters by SHA-256. It converts the multilingual PP-OCRv6 small model for Latin languages and PP-OCRv5 recognizers for Cyrillic, Greek and Korean to ncnn FP32. `build_models.py` calls this downloader for Docker builds. Sources and licenses are listed in [THIRD_PARTY.md](THIRD_PARTY.md).
 
 Docker build arguments choose the bundle. `OCR_PROFILE=server` is the default and includes all recognizers. `OCR_PROFILE=local` requires `OCR_LANGUAGES` with CtS codes separated by `+`.
 
@@ -12,7 +12,7 @@ Docker build arguments choose the bundle. `OCR_PROFILE=server` is the default an
 docker build -f server/Dockerfile --target final --build-arg OCR_PROFILE=local --build-arg OCR_LANGUAGES=eng+pol -t cts-ocr:local .
 ```
 
-The local image in this example contains the shared detector and the multilingual Latin recognizer. Languages that share a recognizer reuse its files. `bundle.json` records the profile, enabled language codes and included recognizers. The runtime reads this bundle without downloading additional models. Health reports its profile and enabled languages.
+The local image in this example contains the shared detector and the multilingual Latin recognizer. Languages that share a recognizer reuse its files. `bundle.json` records the profile, enabled language codes, included recognizers and file hashes. The runtime reads this bundle without downloading additional models. Health reports its profile and enabled languages. Windows uses the same downloader to prepare a selected model bundle for its native worker.
 
 Requests run each required recognizer on a detected line and keep the highest-confidence result for that line. Selecting multiple scripts increases inference work. A line containing several scripts may need a recognizer trained to cover that combination.
 

@@ -36,6 +36,9 @@ Name: "startup"; Description: "Start Circle to Search when I sign in"; Flags: un
 [Files]
 Source: "{tmp}\payload\Circle to Search\*"; DestDir: "{app}"; Flags: external ignoreversion recursesubdirs createallsubdirs
 
+[InstallDelete]
+Type: filesandordirs; Name: "{app}\_internal\ocr-models"
+
 [Icons]
 Name: "{group}\Circle to Search"; Filename: "{app}\Circle to Search.exe"; WorkingDir: "{app}"
 Name: "{userstartup}\Circle to Search"; Filename: "{app}\Circle to Search.exe"; Parameters: "--background"; Tasks: startup

@@ -56,13 +56,12 @@ def main():
     if sys.platform != "win32" or sysconfig.get_platform() != "win-amd64":
         raise SystemExit("Build the Windows x64 bundle with 64-bit Python on Windows.")
     import PyInstaller.__main__
-    from cts_ocr_server.engine import fetch_models as fetch_vulkan
+    from PyInstaller.utils.hooks import collect_delvewheel_libs_directory
 
     out = ROOT / "dist"
     work = ROOT / "build/windows"
     work.mkdir(parents=True, exist_ok=True)
     fetch_tesseract()
-    models = fetch_vulkan(work / "ocr-models")
     name = "Circle to Search"
     bundle = out / name
     if out.resolve().parent != ROOT or bundle.resolve().parent != out.resolve():
@@ -81,8 +80,9 @@ def main():
     data = [
         (ROOT / "circle_to_search/icons", "circle_to_search/icons"),
         (ROOT / "circle_to_search/tessdata", "circle_to_search/tessdata"),
-        (models, "ocr-models"),
     ]
+    ncnn_data, ncnn_binaries = collect_delvewheel_libs_directory("ncnn")
+    data.extend(ncnn_data)
     arguments = [
         "--noconfirm",
         "--windowed",
@@ -97,10 +97,14 @@ def main():
         str(work),
         "--paths",
         str(ROOT),
+        "--paths",
+        str(ROOT / "server"),
         "--noupx",
         "--icon",
         str(icon),
         "--collect-data",
+        "cts_ocr_server",
+        "--collect-submodules",
         "cts_ocr_server",
         "--collect-submodules",
         "uvicorn",
@@ -111,6 +115,8 @@ def main():
     ]
     for source, destination in data:
         arguments.extend(["--add-data", f"{source}{os.pathsep}{destination}"])
+    for source, destination in ncnn_binaries:
+        arguments.extend(["--add-binary", f"{source}{os.pathsep}{destination}"])
     PyInstaller.__main__.run([*arguments, str(Path(__file__).with_name("entry.py"))])
     copy_notices(bundle)
     stem = f"CtS-{__version__}-windows-x64"

@@ -7,17 +7,20 @@ import secrets
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from dataclasses import replace
 from pathlib import Path
 
+from ...languages import selected_models
 from ...ocr_backend import check_server
 
 _LOCK = threading.Lock()
 _PROCESS = None
 _CONNECTION = None
 _GPU = None
+_LANGUAGES = None
 
 
 def available():
@@ -31,9 +34,9 @@ def worker_command():
 
 
 def stop_worker():
-    global _PROCESS, _CONNECTION, _GPU
+    global _PROCESS, _CONNECTION, _GPU, _LANGUAGES
     process = _PROCESS
-    _PROCESS = _CONNECTION = _GPU = None
+    _PROCESS = _CONNECTION = _GPU = _LANGUAGES = None
     if process is None or process.poll() is not None:
         return
     process.terminate()
@@ -47,18 +50,37 @@ def stop_worker():
 atexit.register(stop_worker)
 
 
-def start_worker(config):
-    global _PROCESS, _CONNECTION, _GPU
-    from . import WindowsBackend
+def prepare_model_selection(root, codes):
+    from cts_ocr_server import __version__ as backend_version
+    from cts_ocr_server.bundle import prepare_models, ready_bundle
+    from cts_ocr_server.gpu_models import LANGUAGES
+
+    if not codes or not set(codes) <= set(LANGUAGES):
+        raise RuntimeError("Choose supported OCR languages in the CtS language settings.")
+    cache = root / "models" / backend_version
+    directory = cache / "+".join(codes)
+    if ready_bundle(directory, codes):
+        return directory
+    cache.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="preparing-", dir=cache) as temporary:
+        prepared = prepare_models(Path(temporary), codes)
+        directory.mkdir(exist_ok=True)
+        # Publish the manifest last, after every model file has been replaced.
+        for path in prepared.iterdir():
+            if path.name != "bundle.json":
+                path.replace(directory / path.name)
+        (prepared / "bundle.json").replace(directory / "bundle.json")
+    return directory
+
+
+def start_worker(config, root, models, codes):
+    global _PROCESS, _CONNECTION, _GPU, _LANGUAGES
 
     if not available():
         raise RuntimeError(
             "Install the Windows OCR backend with `python -m pip install ./server` or use the Windows release bundle."
         )
-    root = WindowsBackend().instance_lock_path().parent / "ocr"
     root.mkdir(parents=True, exist_ok=True)
-    bundled = Path(getattr(sys, "_MEIPASS", "")) / "ocr-models"
-    models = bundled if getattr(sys, "frozen", False) and bundled.is_dir() else root / "models"
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         port = listener.getsockname()[1]
@@ -105,7 +127,7 @@ def start_worker(config):
                 continue
             if info.get("accelerated") is not True:
                 raise RuntimeError("The OCR worker did not activate Vulkan.")
-            _CONNECTION, _GPU = connection, config.local_gpu_name
+            _CONNECTION, _GPU, _LANGUAGES = connection, config.local_gpu_name, codes
             return connection, info
         detail = log_path.read_text(encoding="utf-8", errors="replace").strip()[-600:]
         raise RuntimeError(
@@ -116,14 +138,31 @@ def start_worker(config):
         raise
 
 
-def ensure_local(config):
+def ensure_local(config, languages=None):
+    from . import WindowsBackend
+
     with _LOCK:
-        if _CONNECTION is not None and _PROCESS.poll() is None and _GPU == config.local_gpu_name:
+        codes = tuple(sorted(set(languages or selected_models())))
+        if (
+            _CONNECTION is not None
+            and _PROCESS.poll() is None
+            and _GPU == config.local_gpu_name
+            and _LANGUAGES == codes
+        ):
             return replace(_CONNECTION, timeout=config.timeout)
+        if not available():
+            raise RuntimeError("Install the Windows CtS OCR backend before using local GPU mode.")
+        root = WindowsBackend().instance_lock_path().parent / "ocr"
+        try:
+            models = prepare_model_selection(root, codes)
+        except (OSError, ValueError, subprocess.SubprocessError) as error:
+            raise RuntimeError(
+                "Could not prepare the selected GPU models. " + str(error)
+            ) from error
         stop_worker()
-        return start_worker(config)[0]
+        return start_worker(config, root, models, codes)[0]
 
 
-def prepare_local(config):
-    connection = ensure_local(config)
+def prepare_local(config, languages=None):
+    connection = ensure_local(config, languages)
     return check_server(connection)

@@ -45,6 +45,10 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Native Windows OCR engine (CPU reference)
         run: python -m circle_to_search.platforms.windows.ocr_worker --device cpu --self-test --model-dir build/ocr-models
+      - name: Selected multilingual Windows GPU models
+        run: python -m cts_ocr_server.bundle build/windows-multilingual --profile local --languages eng+pol+ukr+ell+kor
+      - name: Multilingual Windows engine (CPU reference)
+        run: python -m circle_to_search.platforms.windows.ocr_worker --device cpu --self-test --model-dir build/windows-multilingual
   backend-container:
     if: github.ref_type != 'tag' || startsWith(github.ref, 'refs/tags/ocr-v')
     needs: desktop

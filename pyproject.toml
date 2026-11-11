@@ -41,7 +41,7 @@ circle_to_search = ["icons/*.svg", "icons/*.png", "tessdata/*.traineddata", "tes
 
 [tool.setuptools.data-files]
 "share/circle-to-search" = ["LICENSE", "THIRD_PARTY.md"]
-"share/circle-to-search/server" = ["server/Dockerfile", "server/pyproject.toml", "server/requirements.lock", "server/README.md", "server/DEVELOPMENT.md", "server/LICENSE", "server/THIRD_PARTY.md", "server/REMOTE_ACCESS.md", "server/compose.yaml", "server/compose.build.yaml", "server/compose.swag.yaml"]
+"share/circle-to-search/server" = ["server/Dockerfile", "server/build_models.py", "server/pyproject.toml", "server/requirements.lock", "server/README.md", "server/DEVELOPMENT.md", "server/LICENSE", "server/THIRD_PARTY.md", "server/REMOTE_ACCESS.md", "server/compose.yaml", "server/compose.build.yaml", "server/compose.swag.yaml"]
 "share/circle-to-search/server/licenses" = ["server/licenses/*.txt"]
 "share/circle-to-search/server/swag" = ["server/swag/*.sample"]
 "share/circle-to-search/server/cts_ocr_server" = ["server/cts_ocr_server/*.py", "server/cts_ocr_server/models.json"]
